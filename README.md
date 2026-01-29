@@ -10,6 +10,37 @@ A privacy-focused, offline-first AI chat application for Android that runs large
 - **Hardware-Aware** - Automatic device capability detection and model recommendations
 - **GGUF Model Support** - Download and run quantized models from Hugging Face
 
+---
+
+## Quick Start
+
+### Option 1: Install Pre-built APK (Easiest)
+
+1. Download the latest APK from the [Releases](https://github.com/alichherawalla/offline-mobile-llm-manager/releases) page
+2. Transfer the APK to your Android device
+3. Enable "Install from Unknown Sources" in Settings → Security
+4. Open the APK file and tap Install
+5. Launch LocalLLM and follow the onboarding wizard
+
+### Option 2: Build and Run from Source
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/alichherawalla/offline-mobile-llm-manager.git
+cd LocalLLM
+
+# 2. Install dependencies
+npm install
+
+# 3. Connect your Android device (USB debugging enabled)
+adb devices  # Verify device is connected
+
+# 4. Run the app
+npm run android
+```
+
+---
+
 ## How It Works
 
 LocalLLM uses [llama.cpp](https://github.com/ggerganov/llama.cpp) compiled for Android to run GGUF-quantized language models directly on your device's CPU/GPU. The app intelligently detects your device's capabilities and recommends appropriate models.
@@ -472,38 +503,94 @@ Fine-tune AI responses in **Settings** → **Model Settings**:
 
 ### Prerequisites
 
-- Node.js 18+
-- React Native CLI
-- Android Studio (Arctic Fox or later)
-- Android SDK 24+
-- Android NDK (for native compilation)
+| Requirement | Version | Notes |
+|-------------|---------|-------|
+| **Node.js** | >= 20 | Check with `node --version` |
+| **npm** | >= 9 | Comes with Node.js |
+| **Java JDK** | 17 | Required for Android builds |
+| **Android Studio** | Ladybug or later | With SDK & NDK |
+| **Android SDK** | API 24+ (target: 36) | Via Android Studio |
+| **Android NDK** | 27.1.12297006 | Via Android Studio |
 
-### Development Setup
+### Step 1: Environment Setup
+
+#### Install Android Studio
+
+1. Download [Android Studio](https://developer.android.com/studio)
+2. Run the installer and complete setup wizard
+3. Open Android Studio → **Settings** → **Languages & Frameworks** → **Android SDK**
+4. Install the following:
+   - **SDK Platforms**: Android 14 (API 36)
+   - **SDK Tools**:
+     - Android SDK Build-Tools
+     - Android SDK Command-line Tools
+     - NDK (Side by side) - version 27.1.12297006
+     - Android Emulator (optional)
+
+#### Configure Environment Variables
+
+Add these to your shell profile (`~/.bashrc`, `~/.zshrc`, or equivalent):
+
+```bash
+# Android SDK location (adjust path as needed)
+export ANDROID_HOME=$HOME/Library/Android/sdk    # macOS
+# export ANDROID_HOME=$HOME/Android/Sdk          # Linux
+# export ANDROID_HOME=%LOCALAPPDATA%\Android\Sdk # Windows
+
+export PATH=$PATH:$ANDROID_HOME/emulator
+export PATH=$PATH:$ANDROID_HOME/platform-tools
+export PATH=$PATH:$ANDROID_HOME/tools
+export PATH=$PATH:$ANDROID_HOME/tools/bin
+```
+
+Reload your shell: `source ~/.zshrc` (or restart terminal)
+
+### Step 2: Project Setup
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/alichherawalla/offline-mobile-llm-manager.git
 cd LocalLLM
 
-# Install dependencies
+# Install JavaScript dependencies
 npm install
 
-# Start Metro bundler
-npm start
+# Verify setup (should show connected devices or emulators)
+adb devices
+```
 
-# In another terminal, run on device
+### Step 3: Running in Development Mode
+
+Development mode enables hot reloading for rapid iteration.
+
+**Terminal 1 - Start Metro Bundler:**
+```bash
+npm start
+```
+
+**Terminal 2 - Run on Device/Emulator:**
+```bash
+# For physical device (connect via USB with debugging enabled)
+npm run android
+
+# For emulator (start emulator first via Android Studio)
 npm run android
 ```
 
-### Building Standalone Debug APK
+**Troubleshooting Development Mode:**
+- If Metro doesn't connect, try: `adb reverse tcp:8081 tcp:8081`
+- Shake device or press `R` twice for reload menu
+- Press `J` in Metro terminal to open debugger
 
-Create an APK that works without the Metro development server:
+### Step 4: Building Debug APK
+
+Creates a standalone APK that works without Metro (for testing/sharing):
 
 ```bash
-# 1. Create assets directory
+# Create assets directory
 mkdir -p android/app/src/main/assets
 
-# 2. Bundle JavaScript
+# Bundle JavaScript code
 npx react-native bundle \
   --platform android \
   --dev false \
@@ -511,14 +598,208 @@ npx react-native bundle \
   --bundle-output android/app/src/main/assets/index.android.bundle \
   --assets-dest android/app/src/main/res
 
-# 3. Build the APK
+# Build debug APK
 cd android && ./gradlew assembleDebug
 
-# 4. Find APK at:
+# APK location:
 # android/app/build/outputs/apk/debug/app-debug.apk
+```
 
-# 5. Install on device
+### Step 5: Building Release APK (Production)
+
+Release builds are optimized and require signing.
+
+#### Generate a Signing Key (One-time)
+
+```bash
+keytool -genkeypair -v \
+  -storetype PKCS12 \
+  -keystore android/app/localllm-release.keystore \
+  -alias localllm-key \
+  -keyalg RSA \
+  -keysize 2048 \
+  -validity 10000
+```
+
+You'll be prompted to create a password. **Save this password securely!**
+
+#### Configure Signing
+
+Create or edit `android/gradle.properties`:
+
+```properties
+MYAPP_RELEASE_STORE_FILE=localllm-release.keystore
+MYAPP_RELEASE_KEY_ALIAS=localllm-key
+MYAPP_RELEASE_STORE_PASSWORD=your_password_here
+MYAPP_RELEASE_KEY_PASSWORD=your_password_here
+```
+
+Edit `android/app/build.gradle` to add the signing config (if not present):
+
+```gradle
+android {
+    ...
+    signingConfigs {
+        release {
+            if (project.hasProperty('MYAPP_RELEASE_STORE_FILE')) {
+                storeFile file(MYAPP_RELEASE_STORE_FILE)
+                storePassword MYAPP_RELEASE_STORE_PASSWORD
+                keyAlias MYAPP_RELEASE_KEY_ALIAS
+                keyPassword MYAPP_RELEASE_KEY_PASSWORD
+            }
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+```
+
+#### Build Release APK
+
+```bash
+# From project root
+cd android && ./gradlew assembleRelease
+
+# APK location:
+# android/app/build/outputs/apk/release/app-release.apk
+```
+
+#### Build Release AAB (For Google Play Store)
+
+```bash
+cd android && ./gradlew bundleRelease
+
+# AAB location:
+# android/app/build/outputs/bundle/release/app-release.aab
+```
+
+---
+
+## Installation Guide
+
+### Installing APK on Android Device
+
+#### Method 1: ADB Install (Recommended for Developers)
+
+```bash
+# Connect device via USB (enable USB debugging first)
+adb devices  # Verify device appears
+
+# Install APK
+adb install android/app/build/outputs/apk/release/app-release.apk
+
+# Or for debug APK
 adb install android/app/build/outputs/apk/debug/app-debug.apk
+
+# If replacing existing installation
+adb install -r app-release.apk
+```
+
+#### Method 2: Direct Transfer (For End Users)
+
+1. **Enable Unknown Sources:**
+   - Go to **Settings** → **Security** (or **Privacy**)
+   - Enable **Install unknown apps** or **Unknown sources**
+   - On Android 8+: Enable for your file manager app specifically
+
+2. **Transfer APK to Device:**
+   - USB cable: Copy APK to device storage
+   - Cloud: Upload to Google Drive/Dropbox, download on device
+   - Email: Send to yourself, download attachment
+   - Local network: Use AirDroid, Snapdrop, etc.
+
+3. **Install:**
+   - Open file manager on device
+   - Navigate to APK location
+   - Tap the APK file
+   - Review permissions and tap **Install**
+   - Tap **Open** when complete
+
+#### Method 3: Wireless ADB (No Cable Needed)
+
+```bash
+# First time: Connect via USB and run
+adb tcpip 5555
+
+# Disconnect USB, then connect wirelessly
+adb connect <device-ip>:5555
+
+# Now install APK wirelessly
+adb install app-release.apk
+```
+
+Find device IP: **Settings** → **About phone** → **Status** → **IP address**
+
+### Updating the App
+
+```bash
+# Via ADB (preserves data)
+adb install -r app-release.apk
+
+# Or manually: Install new APK over existing (same signature required)
+```
+
+### Uninstalling
+
+```bash
+# Via ADB
+adb uninstall com.localllm
+
+# Or: Settings → Apps → LocalLLM → Uninstall
+```
+
+---
+
+## Development Workflow
+
+### Common Commands
+
+| Command | Description |
+|---------|-------------|
+| `npm start` | Start Metro bundler |
+| `npm run android` | Build and run on Android |
+| `npm run ios` | Build and run on iOS |
+| `npm run lint` | Run ESLint checks |
+| `npm test` | Run Jest tests |
+| `npm run clean` | Clean build caches (if configured) |
+
+### Useful ADB Commands
+
+```bash
+# List connected devices
+adb devices
+
+# View app logs
+adb logcat -s ReactNativeJS
+
+# Clear app data (reset to fresh state)
+adb shell pm clear com.localllm
+
+# Take screenshot
+adb exec-out screencap -p > screenshot.png
+
+# Open app
+adb shell am start -n com.localllm/.MainActivity
+
+# Force stop app
+adb shell am force-stop com.localllm
+```
+
+### Clean Build (When Things Go Wrong)
+
+```bash
+# Clean everything and rebuild
+cd android && ./gradlew clean
+cd ..
+rm -rf node_modules
+npm install
+npm run android
 ```
 
 ### Project Structure
