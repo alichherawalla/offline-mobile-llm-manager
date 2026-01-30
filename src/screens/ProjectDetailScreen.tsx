@@ -33,7 +33,7 @@ export const ProjectDetailScreen: React.FC = () => {
 
   // Get chats for this project
   const projectChats = conversations
-    .filter((c) => c.personaId === projectId)
+    .filter((c) => c.projectId === projectId)
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
   const getProjectColor = () => {

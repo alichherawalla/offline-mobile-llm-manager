@@ -110,7 +110,7 @@ export interface Conversation {
   messages: Message[];
   createdAt: string;
   updatedAt: string;
-  personaId?: string;
+  projectId?: string;
 }
 
 // Onboarding-related types

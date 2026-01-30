@@ -71,7 +71,7 @@ export const ChatsListScreen: React.FC = () => {
   };
 
   const renderChat = ({ item }: { item: Conversation }) => {
-    const project = item.personaId ? getProject(item.personaId) : null;
+    const project = item.projectId ? getProject(item.projectId) : null;
     const lastMessage = item.messages[item.messages.length - 1];
 
     return (

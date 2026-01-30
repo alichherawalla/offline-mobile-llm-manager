@@ -24,7 +24,7 @@ export const ProjectsScreen: React.FC = () => {
 
   // Get chat count for a project
   const getChatCount = (projectId: string) => {
-    return conversations.filter((c) => c.personaId === projectId).length;
+    return conversations.filter((c) => c.projectId === projectId).length;
   };
 
   // Get color for project

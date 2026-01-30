@@ -481,7 +481,7 @@ class LLMService {
       if (message.role === 'system') {
         // Collect system messages (there might be multiple: main + context note)
         if (message.id === 'system') {
-          // This is the main persona/system prompt
+          // This is the main project system prompt
           systemPromptContent = message.content;
           prompt += `<|im_start|>system\n${message.content}<|im_end|>\n`;
         } else {

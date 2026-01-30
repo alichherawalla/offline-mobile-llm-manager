@@ -53,7 +53,18 @@ A full-featured chat experience with real-time streaming responses. Watch the AI
 - Expandable thought process view (for reasoning models)
 - Message actions: Copy, Edit, Resend
 - Voice input with on-device Whisper transcription
+- **Vision model support** with image attachments
 - Debug panel for power users
+
+### Vision Model Support
+
+Send images to vision-capable models like LLaVA and SmolVLM. When you download a vision model, LocalLLM automatically detects and downloads the required multimodal projector (mmproj) file.
+
+**Vision features:**
+- Automatic mmproj file detection and download
+- Camera and photo library support
+- Image preview before sending
+- Works completely offline after download
 
 ### Switch Models Instantly
 
@@ -81,9 +92,9 @@ Full control over inference parameters, just like LM Studio on desktop. Adjust t
 | CPU Threads | 1 - 12 | Performance tuning |
 | Batch Size | 32 - 512 | Processing chunk size |
 
-### Projects (AI Personas)
+### Projects
 
-Create custom AI personalities with unique system prompts. Perfect for different use cases—code review, creative writing, language learning, or anything you imagine.
+Create custom AI contexts with unique system prompts. Perfect for different use cases—code review, creative writing, language learning, or anything you imagine.
 
 <p align="center">
   <img src="screenshots/Screenshot_2026-01-30-12-30-08-22_f28200242d1465b50ec18721116dc637.jpg" width="250" alt="Projects List">
@@ -271,13 +282,23 @@ GGUF models come in different quantization levels. Choose the right balance of q
 
 LocalLLM supports any GGUF-format model compatible with llama.cpp:
 
+### Text Models
 - **Qwen3** - Excellent multilingual reasoning
 - **Llama 3.2** - Meta's latest open models
 - **Phi-3** - Microsoft's efficient small models
 - **Gemma 2** - Google's open models
 - **Mistral** - High-quality European models
 - **SmolLM** - Hugging Face's tiny but capable models
-- And thousands more on Hugging Face
+
+### Vision Models
+- **SmolVLM** - Compact vision-language model (recommended)
+- **LLaVA** - Large Language and Vision Assistant
+- **Qwen2-VL** - Qwen's vision-language models
+- **MiniCPM-V** - Efficient multimodal models
+
+Vision models automatically download the required mmproj companion file for image understanding.
+
+And thousands more on Hugging Face...
 
 ---
 

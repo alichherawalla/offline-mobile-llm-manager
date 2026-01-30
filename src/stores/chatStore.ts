@@ -14,11 +14,11 @@ interface ChatState {
   isThinking: boolean; // True when processing prompt, before first token
 
   // Actions
-  createConversation: (modelId: string, title?: string, personaId?: string) => string;
+  createConversation: (modelId: string, title?: string, projectId?: string) => string;
   deleteConversation: (conversationId: string) => void;
   setActiveConversation: (conversationId: string | null) => void;
   getActiveConversation: () => Conversation | null;
-  setConversationProject: (conversationId: string, personaId: string | null) => void;
+  setConversationProject: (conversationId: string, projectId: string | null) => void;
 
   // Messages
   addMessage: (conversationId: string, message: Omit<Message, 'id' | 'timestamp'>, attachments?: MediaAttachment[]) => Message;
@@ -50,7 +50,7 @@ export const useChatStore = create<ChatState>()(
       isStreaming: false,
       isThinking: false,
 
-      createConversation: (modelId, title, personaId) => {
+      createConversation: (modelId, title, projectId) => {
         const id = generateId();
         const conversation: Conversation = {
           id,
@@ -59,7 +59,7 @@ export const useChatStore = create<ChatState>()(
           messages: [],
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-          personaId: personaId,
+          projectId: projectId,
         };
 
         set((state) => ({
@@ -99,11 +99,11 @@ export const useChatStore = create<ChatState>()(
         return state.conversations.find((c) => c.id === state.activeConversationId) || null;
       },
 
-      setConversationProject: (conversationId, personaId) => {
+      setConversationProject: (conversationId, projectId) => {
         set((state) => ({
           conversations: state.conversations.map((conv) =>
             conv.id === conversationId
-              ? { ...conv, personaId: personaId || undefined, updatedAt: new Date().toISOString() }
+              ? { ...conv, projectId: projectId || undefined, updatedAt: new Date().toISOString() }
               : conv
           ),
         }));

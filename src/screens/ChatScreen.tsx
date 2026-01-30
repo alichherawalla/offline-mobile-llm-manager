@@ -81,8 +81,8 @@ export const ChatScreen: React.FC = () => {
     (c) => c.id === activeConversationId
   );
   const activeModel = downloadedModels.find((m) => m.id === activeModelId);
-  const activeProject = activeConversation?.personaId
-    ? getProject(activeConversation.personaId)
+  const activeProject = activeConversation?.projectId
+    ? getProject(activeConversation.projectId)
     : null;
 
   // Handle route params - set active conversation or create new one
