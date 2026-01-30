@@ -11,7 +11,9 @@ import {
   TouchableOpacity,
   Modal,
   ScrollView,
+  Image,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/Feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import {
@@ -24,8 +26,8 @@ import {
 } from '../components';
 import { COLORS, APP_CONFIG } from '../constants';
 import { useAppStore, useChatStore, useProjectStore } from '../stores';
-import { llmService, modelManager } from '../services';
-import { Message, MediaAttachment, Project, DownloadedModel } from '../types';
+import { llmService, modelManager, onnxImageGeneratorService, intentClassifier } from '../services';
+import { Message, MediaAttachment, Project, DownloadedModel, ImageModeState } from '../types';
 import { ChatsStackParamList } from '../navigation/types';
 
 type ChatScreenRouteProp = RouteProp<ChatsStackParamList, 'Chat'>;
@@ -52,10 +54,26 @@ export const ChatScreen: React.FC = () => {
   const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
   // Track which conversation a generation was started for
   const generatingForConversationRef = useRef<string | null>(null);
+  // Track when generation started for timing
+  const generationStartTimeRef = useRef<number | null>(null);
   const navigation = useNavigation();
   const route = useRoute<ChatScreenRouteProp>();
 
-  const { activeModelId, downloadedModels, settings, setActiveModelId } = useAppStore();
+  const {
+    activeModelId,
+    downloadedModels,
+    settings,
+    setActiveModelId,
+    activeImageModelId,
+    downloadedImageModels,
+    setDownloadedImageModels,
+    isGeneratingImage,
+    imageGenerationProgress,
+    imageGenerationStatus,
+    setIsGeneratingImage,
+    setImageGenerationProgress,
+    setImageGenerationStatus,
+  } = useAppStore();
   const {
     activeConversationId,
     conversations,
@@ -84,6 +102,11 @@ export const ChatScreen: React.FC = () => {
   const activeProject = activeConversation?.projectId
     ? getProject(activeConversation.projectId)
     : null;
+  const activeImageModel = downloadedImageModels.find((m) => m.id === activeImageModelId);
+  const imageModelLoaded = !!activeImageModel;
+
+  // Track image mode state
+  const [currentImageMode, setCurrentImageMode] = useState<ImageModeState>('auto');
 
   // Handle route params - set active conversation or create new one
   useEffect(() => {
@@ -115,6 +138,50 @@ export const ChatScreen: React.FC = () => {
       ensureModelLoaded();
     }
   }, [activeModelId]);
+
+  // Load image models on mount
+  useEffect(() => {
+    const loadImageModels = async () => {
+      const models = await modelManager.getDownloadedImageModels();
+      setDownloadedImageModels(models);
+    };
+    loadImageModels();
+  }, []);
+
+  // Preload classifier model when LLM classification is enabled with a specific model
+  useEffect(() => {
+    const preloadClassifierModel = async () => {
+      // Only preload if:
+      // 1. Auto mode with LLM detection
+      // 2. A specific classifier model is selected
+      // 3. An image model is available (so classification will be used)
+      // 4. Performance mode is enabled (keep models loaded)
+      if (
+        settings.imageGenerationMode === 'auto' &&
+        settings.autoDetectMethod === 'llm' &&
+        settings.classifierModelId &&
+        activeImageModelId &&
+        settings.modelLoadingStrategy === 'performance'
+      ) {
+        const classifierModel = downloadedModels.find(m => m.id === settings.classifierModelId);
+        if (classifierModel && classifierModel.filePath) {
+          const currentPath = llmService.getLoadedModelPath();
+          // Don't preload if the main model is different and already loaded
+          // (we don't want to replace the user's selected model)
+          // Only preload if no model is loaded yet
+          if (!currentPath) {
+            console.log('[ChatScreen] Preloading classifier model:', classifierModel.name);
+            try {
+              await llmService.loadModel(classifierModel.filePath);
+            } catch (error) {
+              console.warn('[ChatScreen] Failed to preload classifier model:', error);
+            }
+          }
+        }
+      }
+    };
+    preloadClassifierModel();
+  }, [settings.imageGenerationMode, settings.autoDetectMethod, settings.classifierModelId, activeImageModelId, settings.modelLoadingStrategy]);
 
   useEffect(() => {
     // Scroll to bottom when new messages arrive
@@ -208,7 +275,154 @@ export const ChatScreen: React.FC = () => {
     }
   };
 
-  const handleSend = async (text: string, attachments?: MediaAttachment[]) => {
+  // Determine if message should be routed to image generation
+  const shouldRouteToImageGeneration = async (text: string, forceImageMode?: boolean): Promise<boolean> => {
+    // Manual mode: only generate image when explicitly forced
+    if (settings.imageGenerationMode === 'manual') {
+      return forceImageMode === true;
+    }
+
+    // Force mode: always generate image
+    if (forceImageMode) {
+      return true;
+    }
+
+    // Auto mode: use intent classifier
+    if (!imageModelLoaded) {
+      return false;
+    }
+
+    try {
+      // Use LLM for classification only if autoDetectMethod is 'llm'
+      const useLLM = settings.autoDetectMethod === 'llm';
+      const classifierModel = settings.classifierModelId
+        ? downloadedModels.find(m => m.id === settings.classifierModelId)
+        : null;
+
+      // Show status when using LLM classification
+      if (useLLM) {
+        setIsGeneratingImage(true);
+        setImageGenerationStatus('Preparing classifier...');
+      }
+
+      const intent = await intentClassifier.classifyIntent(text, {
+        useLLM,
+        classifierModel,
+        currentModelPath: llmService.getLoadedModelPath(),
+        onStatusChange: useLLM ? setImageGenerationStatus : undefined,
+        modelLoadingStrategy: settings.modelLoadingStrategy,
+      });
+
+      // Clear status if not generating image
+      if (intent !== 'image') {
+        setImageGenerationStatus(null);
+        setIsGeneratingImage(false);
+      }
+
+      return intent === 'image';
+    } catch (error) {
+      console.warn('[ChatScreen] Intent classification failed:', error);
+      setImageGenerationStatus(null);
+      setIsGeneratingImage(false);
+      return false;
+    }
+  };
+
+  // Handle image generation
+  const handleImageGeneration = async (prompt: string, conversationId: string, skipUserMessage = false) => {
+    if (!activeImageModel) {
+      Alert.alert('Error', 'No image model loaded.');
+      return;
+    }
+
+    // Add user message (skip when generating from existing message via long-press)
+    if (!skipUserMessage) {
+      addMessage(
+        conversationId,
+        {
+          role: 'user',
+          content: prompt,
+        }
+      );
+    }
+
+    // Load image model if not loaded
+    const isImageModelLoaded = await onnxImageGeneratorService.isModelLoaded();
+    const loadedPath = await onnxImageGeneratorService.getLoadedModelPath();
+
+    if (!isImageModelLoaded || loadedPath !== activeImageModel.modelPath) {
+      try {
+        setIsGeneratingImage(true);
+        setImageGenerationStatus(`Loading ${activeImageModel.name}...`);
+        setImageGenerationProgress({ step: 0, totalSteps: settings.imageSteps || 30 });
+        await onnxImageGeneratorService.loadModel(activeImageModel.modelPath);
+      } catch (error: any) {
+        setIsGeneratingImage(false);
+        setImageGenerationProgress(null);
+        setImageGenerationStatus(null);
+        Alert.alert('Error', `Failed to load image model: ${error?.message || 'Unknown error'}`);
+        return;
+      }
+    }
+
+    setIsGeneratingImage(true);
+    setImageGenerationStatus('Starting image generation...');
+
+    // Track image generation start time
+    const imageGenStartTime = Date.now();
+
+    try {
+      const result = await onnxImageGeneratorService.generateImage(
+        {
+          prompt,
+          steps: settings.imageSteps || 30,
+          guidanceScale: settings.imageGuidanceScale || 7.5,
+        },
+        (progress) => {
+          setImageGenerationProgress({
+            step: progress.step,
+            totalSteps: progress.totalSteps,
+          });
+          setImageGenerationStatus(`Generating image (${progress.step}/${progress.totalSteps})...`);
+        }
+      );
+
+      // Calculate generation time
+      const imageGenTime = Date.now() - imageGenStartTime;
+
+      // Add assistant message with generated image using the promise result
+      if (result && result.imagePath) {
+        console.log('[ChatScreen] Image generated, adding to chat:', result.imagePath);
+        setImageGenerationStatus('Saving image...');
+        addMessage(
+          conversationId,
+          {
+            role: 'assistant',
+            content: `Generated image for: "${prompt}"`,
+          },
+          [{
+            id: result.id,
+            type: 'image',
+            uri: `file://${result.imagePath}`,
+            width: result.width,
+            height: result.height,
+          }],
+          imageGenTime
+        );
+      }
+    } catch (error: any) {
+      if (!error?.message?.includes('cancelled')) {
+        Alert.alert('Error', `Image generation failed: ${error?.message || 'Unknown error'}`);
+      }
+    } finally {
+      setIsGeneratingImage(false);
+      setImageGenerationProgress(null);
+      setImageGenerationStatus(null);
+      setCurrentImageMode('auto');
+    }
+  };
+
+  const handleSend = async (text: string, attachments?: MediaAttachment[], forceImageMode?: boolean) => {
     if (!activeConversationId || !activeModel) {
       Alert.alert('No Model Selected', 'Please select a model first.');
       return;
@@ -216,12 +430,32 @@ export const ChatScreen: React.FC = () => {
 
     // Capture the conversation ID at the start - this won't change even if user switches chats
     const targetConversationId = activeConversationId;
+
+    // Check if this should be routed to image generation
+    const shouldGenerateImage = await shouldRouteToImageGeneration(text, forceImageMode);
+
+    if (shouldGenerateImage && activeImageModel) {
+      await handleImageGeneration(text, targetConversationId);
+      return;
+    }
+
+    // If image was requested but no model loaded, add a note
+    if (shouldGenerateImage && !activeImageModel) {
+      // Continue with text response but mention image capability
+      text = `[User wanted an image but no image model is loaded] ${text}`;
+    }
+
     generatingForConversationRef.current = targetConversationId;
 
-    // Ensure model is loaded
-    if (!llmService.isModelLoaded()) {
+    // Ensure the correct model is loaded (not just any model)
+    // This is important after LLM classification in memory mode, where the classifier
+    // model may be loaded instead of the text generation model
+    const currentLoadedPath = llmService.getLoadedModelPath();
+    const needsModelLoad = !currentLoadedPath || currentLoadedPath !== activeModel.filePath;
+
+    if (needsModelLoad) {
       await ensureModelLoaded();
-      if (!llmService.isModelLoaded()) {
+      if (!llmService.isModelLoaded() || llmService.getLoadedModelPath() !== activeModel.filePath) {
         Alert.alert('Error', 'Failed to load model. Please try again.');
         generatingForConversationRef.current = null;
         return;
@@ -274,6 +508,9 @@ export const ChatScreen: React.FC = () => {
     // Track first token locally to avoid stale closure issues with React state
     let firstTokenReceived = false;
 
+    // Track generation start time
+    generationStartTimeRef.current = Date.now();
+
     try {
       await llmService.generateResponse(
         messagesForContext,
@@ -293,9 +530,13 @@ export const ChatScreen: React.FC = () => {
         () => {
           // Use the captured conversation ID, not the current active one
           if (generatingForConversationRef.current === targetConversationId) {
-            finalizeStreamingMessage(targetConversationId);
+            const generationTime = generationStartTimeRef.current
+              ? Date.now() - generationStartTimeRef.current
+              : undefined;
+            finalizeStreamingMessage(targetConversationId, generationTime);
           }
           generatingForConversationRef.current = null;
+          generationStartTimeRef.current = null;
         },
         (error) => {
           if (generatingForConversationRef.current === targetConversationId) {
@@ -303,6 +544,7 @@ export const ChatScreen: React.FC = () => {
             Alert.alert('Generation Error', error.message);
           }
           generatingForConversationRef.current = null;
+          generationStartTimeRef.current = null;
         },
         () => {
           // onThinking - prompt is being processed
@@ -316,17 +558,32 @@ export const ChatScreen: React.FC = () => {
         clearStreamingMessage();
       }
       generatingForConversationRef.current = null;
+      generationStartTimeRef.current = null;
     }
   };
 
   const handleStop = async () => {
+    // Stop text generation
     const targetConversationId = generatingForConversationRef.current;
+    const generationTime = generationStartTimeRef.current
+      ? Date.now() - generationStartTimeRef.current
+      : undefined;
     generatingForConversationRef.current = null;
+    generationStartTimeRef.current = null;
     await llmService.stopGeneration();
     if (targetConversationId && streamingMessage.trim()) {
-      finalizeStreamingMessage(targetConversationId);
+      finalizeStreamingMessage(targetConversationId, generationTime);
     } else {
       clearStreamingMessage();
+    }
+
+    // Stop image generation if in progress
+    if (isGeneratingImage) {
+      setImageGenerationStatus('Cancelling...');
+      await onnxImageGeneratorService.cancelGeneration();
+      setIsGeneratingImage(false);
+      setImageGenerationProgress(null);
+      setImageGenerationStatus(null);
     }
   };
 
@@ -430,6 +687,9 @@ export const ChatScreen: React.FC = () => {
     // Track first token locally to avoid stale closure issues
     let firstTokenReceived = false;
 
+    // Track generation start time
+    generationStartTimeRef.current = Date.now();
+
     try {
       await llmService.generateResponse(
         messagesForContext,
@@ -446,9 +706,13 @@ export const ChatScreen: React.FC = () => {
         },
         () => {
           if (generatingForConversationRef.current === targetConversationId) {
-            finalizeStreamingMessage(targetConversationId);
+            const generationTime = generationStartTimeRef.current
+              ? Date.now() - generationStartTimeRef.current
+              : undefined;
+            finalizeStreamingMessage(targetConversationId, generationTime);
           }
           generatingForConversationRef.current = null;
+          generationStartTimeRef.current = null;
         },
         (error) => {
           if (generatingForConversationRef.current === targetConversationId) {
@@ -456,6 +720,7 @@ export const ChatScreen: React.FC = () => {
             Alert.alert('Generation Error', error.message);
           }
           generatingForConversationRef.current = null;
+          generationStartTimeRef.current = null;
         },
         () => {
           if (generatingForConversationRef.current === targetConversationId) {
@@ -468,6 +733,7 @@ export const ChatScreen: React.FC = () => {
         clearStreamingMessage();
       }
       generatingForConversationRef.current = null;
+      generationStartTimeRef.current = null;
     }
   };
 
@@ -494,6 +760,16 @@ export const ChatScreen: React.FC = () => {
     setShowProjectSelector(false);
   };
 
+  const handleGenerateImageFromMessage = async (prompt: string) => {
+    if (!activeConversationId || !activeImageModel) {
+      Alert.alert('No Image Model', 'Please load an image model first from the Models screen.');
+      return;
+    }
+
+    // Skip adding user message since we're generating from an existing message
+    await handleImageGeneration(prompt, activeConversationId, true);
+  };
+
   const renderMessage = ({ item }: { item: Message }) => (
     <ChatMessage
       message={item}
@@ -501,6 +777,8 @@ export const ChatScreen: React.FC = () => {
       onCopy={handleCopyMessage}
       onRetry={handleRetryMessage}
       onEdit={handleEditMessage}
+      onGenerateImage={handleGenerateImageFromMessage}
+      canGenerateImage={imageModelLoaded && !isStreaming && !isGeneratingImage}
     />
   );
 
@@ -674,20 +952,62 @@ export const ChatScreen: React.FC = () => {
           />
         )}
 
+        {/* Image generation progress indicator */}
+        {isGeneratingImage && (
+          <View style={styles.imageProgressContainer}>
+            <View style={styles.imageProgressCard}>
+              <View style={styles.imageProgressHeader}>
+                <View style={styles.imageProgressIconContainer}>
+                  <Icon name="image" size={18} color={COLORS.primary} />
+                </View>
+                <View style={styles.imageProgressInfo}>
+                  <Text style={styles.imageProgressTitle}>Generating Image</Text>
+                  <Text style={styles.imageProgressStatus} numberOfLines={1}>
+                    {imageGenerationStatus || 'Initializing...'}
+                  </Text>
+                </View>
+                {imageGenerationProgress && (
+                  <Text style={styles.imageProgressSteps}>
+                    {imageGenerationProgress.step}/{imageGenerationProgress.totalSteps}
+                  </Text>
+                )}
+              </View>
+              {imageGenerationProgress && (
+                <View style={styles.imageProgressBarContainer}>
+                  <View style={styles.imageProgressBar}>
+                    <View
+                      style={[
+                        styles.imageProgressFill,
+                        { width: `${(imageGenerationProgress.step / imageGenerationProgress.totalSteps) * 100}%` }
+                      ]}
+                    />
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
         {/* Input */}
         <ChatInput
           onSend={handleSend}
           onStop={handleStop}
-          disabled={!llmService.isModelLoaded()}
-          isGenerating={isStreaming}
+          disabled={!llmService.isModelLoaded() || isGeneratingImage}
+          isGenerating={isStreaming || isGeneratingImage}
           supportsVision={supportsVision}
           conversationId={activeConversationId}
+          imageModelLoaded={imageModelLoaded}
+          onImageModeChange={setCurrentImageMode}
+          onOpenSettings={() => setShowSettingsPanel(true)}
+          activeImageModelName={activeImageModel?.name || null}
           placeholder={
-            llmService.isModelLoaded()
-              ? supportsVision
-                ? 'Type a message or add an image...'
-                : 'Type a message...'
-              : 'Loading model...'
+            isGeneratingImage
+              ? 'Generating image...'
+              : llmService.isModelLoaded()
+                ? supportsVision
+                  ? 'Type a message or add an image...'
+                  : 'Type a message...'
+                : 'Loading model...'
           }
         />
       </KeyboardAvoidingView>
@@ -1336,5 +1656,67 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     lineHeight: 16,
+  },
+  imageProgressContainer: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 4,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.background,
+  },
+  imageProgressCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: COLORS.primary + '30',
+  },
+  imageProgressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  imageProgressIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: COLORS.primary + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  imageProgressInfo: {
+    flex: 1,
+  },
+  imageProgressTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  imageProgressStatus: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 1,
+  },
+  imageProgressBarContainer: {
+    marginTop: 10,
+  },
+  imageProgressBar: {
+    height: 4,
+    backgroundColor: COLORS.surfaceLight,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  imageProgressFill: {
+    height: '100%',
+    backgroundColor: COLORS.primary,
+    borderRadius: 2,
+  },
+  imageProgressSteps: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.primary,
+    minWidth: 45,
+    textAlign: 'right',
   },
 });
