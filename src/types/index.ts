@@ -101,6 +101,8 @@ export interface Message {
   isStreaming?: boolean;
   isThinking?: boolean;
   attachments?: MediaAttachment[];
+  /** Generation duration in milliseconds */
+  generationTimeMs?: number;
 }
 
 export interface Conversation {
@@ -167,6 +169,38 @@ export interface ImageGenerationModel {
   size: number;
   variant?: string; // e.g., 'gpu', 'npu', 'cpu'
 }
+
+// ONNX Image Model types (for Stable Diffusion via ONNX Runtime)
+export interface ONNXImageModel {
+  id: string;
+  name: string;
+  description: string;
+  modelPath: string;
+  downloadedAt: string;
+  size: number; // Total size of all model files in bytes
+  style?: string; // e.g., 'creative', 'photorealistic', 'anime'
+}
+
+// Image generation state for UI
+export interface ImageGenerationState {
+  isGenerating: boolean;
+  currentStep: number;
+  totalSteps: number;
+  progress: number;
+  prompt?: string;
+}
+
+// Image generation mode
+export type ImageGenerationMode = 'auto' | 'manual';
+
+// Auto-detection method for image requests
+export type AutoDetectMethod = 'pattern' | 'llm';
+
+// Model loading strategy
+export type ModelLoadingStrategy = 'performance' | 'memory';
+
+// Image mode state for chat input
+export type ImageModeState = 'auto' | 'force';
 
 export interface GeneratedImage {
   id: string;
