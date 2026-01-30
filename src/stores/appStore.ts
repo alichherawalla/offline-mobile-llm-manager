@@ -185,9 +185,11 @@ export const useAppStore = create<AppState>()(
         // Model to use for LLM-based classification (null = use current model)
         classifierModelId: null as string | null,
         // Image generation steps (more = better quality but slower)
-        imageSteps: 30,
+        // For standard SD: 20-30 steps, For LCM: 4-8 steps
+        imageSteps: 8,
         // Guidance scale for image generation
-        imageGuidanceScale: 7.5,
+        // For standard SD: 7.5, For LCM: 1.0-2.0
+        imageGuidanceScale: 2.0,
         // Model loading strategy: 'performance' = keep loaded, 'memory' = load on demand
         modelLoadingStrategy: 'memory' as ModelLoadingStrategy,
       },
