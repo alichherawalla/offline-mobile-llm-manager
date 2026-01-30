@@ -30,6 +30,12 @@ export interface ModelFile {
   size: number;
   quantization: string;
   downloadUrl: string;
+  // Companion mmproj for vision models
+  mmProjFile?: {
+    name: string;
+    size: number;
+    downloadUrl: string;
+  };
 }
 
 export interface DownloadedModel {
@@ -42,6 +48,11 @@ export interface DownloadedModel {
   quantization: string;
   downloadedAt: string;
   credibility?: ModelCredibility;
+  // Vision model support
+  isVisionModel?: boolean;
+  mmProjPath?: string;
+  mmProjFileName?: string;
+  mmProjFileSize?: number;
 }
 
 export interface DownloadProgress {

@@ -97,18 +97,28 @@ class HuggingFaceService {
         lfs?: { size: number };
       }> = await response.json();
 
-      // Filter for GGUF files and transform
-      const ggufFiles = files
-        .filter(file => file.type === 'file' && file.path.endsWith('.gguf'))
-        .map(file => ({
-          name: file.path,
-          size: file.lfs?.size || file.size || 0,
-          quantization: this.extractQuantization(file.path),
-          downloadUrl: this.getDownloadUrl(modelId, file.path),
-        }))
+      // Filter for GGUF files
+      const allGguf = files.filter(file => file.type === 'file' && file.path.endsWith('.gguf'));
+
+      // Separate mmproj files from model files
+      const mmProjFiles = allGguf.filter(f => this.isMMProjFile(f.path));
+      const modelFiles = allGguf.filter(f => !this.isMMProjFile(f.path));
+
+      // Transform and pair each model file with its matching mmproj
+      const result = modelFiles
+        .map(file => {
+          const mmProjFile = this.findMatchingMMProj(file.path, mmProjFiles, modelId);
+          return {
+            name: file.path,
+            size: file.lfs?.size || file.size || 0,
+            quantization: this.extractQuantization(file.path),
+            downloadUrl: this.getDownloadUrl(modelId, file.path),
+            mmProjFile,
+          };
+        })
         .sort((a, b) => a.size - b.size);
 
-      return ggufFiles;
+      return result;
     } catch (error) {
       console.error('Error fetching model files:', error);
       // Fallback to siblings method
@@ -137,9 +147,30 @@ class HuggingFaceService {
         return [];
       }
 
-      return result.siblings
-        .filter(file => file.rfilename.endsWith('.gguf'))
-        .map(file => this.transformFileInfo(modelId, file))
+      // Filter for GGUF files
+      const allGguf = result.siblings.filter(file => file.rfilename.endsWith('.gguf'));
+
+      // Separate mmproj files from model files
+      const mmProjFiles = allGguf.filter(f => this.isMMProjFile(f.rfilename));
+      const modelFiles = allGguf.filter(f => !this.isMMProjFile(f.rfilename));
+
+      // Convert mmproj files to the format expected by findMatchingMMProj
+      const mmProjFilesForMatching = mmProjFiles.map(f => ({
+        path: f.rfilename,
+        size: f.size,
+        lfs: f.lfs,
+      }));
+
+      // Transform and pair each model file with its matching mmproj
+      return modelFiles
+        .map(file => {
+          const baseFile = this.transformFileInfo(modelId, file);
+          const mmProjFile = this.findMatchingMMProj(file.rfilename, mmProjFilesForMatching, modelId);
+          return {
+            ...baseFile,
+            mmProjFile,
+          };
+        })
         .sort((a, b) => a.size - b.size);
     } catch (error) {
       console.error('Error fetching model files from siblings:', error);
@@ -245,6 +276,52 @@ class HuggingFaceService {
     }
 
     return 'Unknown';
+  }
+
+  private isMMProjFile(fileName: string): boolean {
+    const lower = fileName.toLowerCase();
+    return lower.includes('mmproj') ||
+           lower.includes('projector') ||
+           (lower.includes('clip') && lower.endsWith('.gguf'));
+  }
+
+  private findMatchingMMProj(
+    modelFileName: string,
+    mmProjFiles: Array<{ path: string; size?: number; lfs?: { size: number } }>,
+    modelId: string
+  ): { name: string; size: number; downloadUrl: string } | undefined {
+    if (mmProjFiles.length === 0) {
+      return undefined;
+    }
+
+    const modelQuant = this.extractQuantization(modelFileName);
+    const modelLower = modelFileName.toLowerCase();
+
+    // Try to match by quantization level
+    for (const mmProj of mmProjFiles) {
+      const mmProjQuant = this.extractQuantization(mmProj.path);
+      // Match exact quantization or if model uses the mmproj's quantization variant
+      if (mmProjQuant !== 'Unknown' && modelLower.includes(mmProjQuant.toLowerCase())) {
+        return {
+          name: mmProj.path,
+          size: mmProj.lfs?.size || mmProj.size || 0,
+          downloadUrl: this.getDownloadUrl(modelId, mmProj.path),
+        };
+      }
+    }
+
+    // Fallback: prefer f16 mmproj if available, otherwise use the first one
+    const f16MMProj = mmProjFiles.find(f => {
+      const lower = f.path.toLowerCase();
+      return lower.includes('f16') || lower.includes('fp16');
+    });
+
+    const selectedMMProj = f16MMProj || mmProjFiles[0];
+    return {
+      name: selectedMMProj.path,
+      size: selectedMMProj.lfs?.size || selectedMMProj.size || 0,
+      downloadUrl: this.getDownloadUrl(modelId, selectedMMProj.path),
+    };
   }
 
   private extractDescription(result: HFModelSearchResult): string {

@@ -132,7 +132,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
                       </Text>
                       <View style={styles.modelMeta}>
                         <Text style={styles.modelSize}>
-                          {formatSize(model.fileSize)}
+                          {formatSize(model.fileSize + (model.mmProjFileSize || 0))}
                         </Text>
                         {(quantInfo || model.quantization) && (
                           <>
@@ -140,6 +140,12 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
                             <Text style={styles.modelQuant}>
                               {quantInfo || model.quantization}
                             </Text>
+                          </>
+                        )}
+                        {model.isVisionModel && (
+                          <>
+                            <Text style={styles.metaSeparator}>•</Text>
+                            <Text style={styles.visionBadge}>Vision</Text>
                           </>
                         )}
                       </View>
@@ -270,6 +276,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.textMuted,
     fontFamily: 'monospace',
+  },
+  visionBadge: {
+    fontSize: 11,
+    color: COLORS.secondary,
+    fontWeight: '600',
+    backgroundColor: COLORS.secondary + '20',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    overflow: 'hidden',
   },
   checkmark: {
     width: 28,

@@ -1,4 +1,4 @@
-import { initLlama, LlamaContext } from 'llama.rn';
+import { initLlama, LlamaContext, RNLlamaOAICompatibleMessage, RNLlamaMessagePart } from 'llama.rn';
 import { Platform } from 'react-native';
 import RNFS from 'react-native-fs';
 import { Message, MediaAttachment } from '../types';
@@ -106,35 +106,45 @@ class LLMService {
       return;
     }
 
+    // Verify files exist
+    const modelExists = await RNFS.exists(modelPath);
+    if (!modelExists) {
+      throw new Error(`Model file not found at: ${modelPath}`);
+    }
+
+    if (mmProjPath) {
+      const mmProjExists = await RNFS.exists(mmProjPath);
+      if (!mmProjExists) {
+        console.warn('[LLM] MMProj file not found, disabling vision support');
+        mmProjPath = undefined;
+      }
+    }
+
     try {
       // Get settings from appStore, fallback to defaults
       const { settings } = useAppStore.getState();
       const nThreads = settings.nThreads || getOptimalThreadCount();
       const nBatch = settings.nBatch || getOptimalBatchSize();
-      const contextLength = settings.contextLength || APP_CONFIG.maxContextLength;
+      // Use smaller context for vision models to save memory
+      const contextLength = Math.min(settings.contextLength || APP_CONFIG.maxContextLength, 2048);
 
       // Update internal settings tracker
       this.currentSettings = { nThreads, nBatch, contextLength };
 
-      console.log(`[LLM] Loading with threads=${nThreads}, batch=${nBatch}, ctx=${contextLength}`);
-
       // Determine GPU layers based on platform
-      // iOS: Use Metal with all layers on GPU
-      // Android: Can try GPU if device supports it
       const nGpuLayers = Platform.OS === 'ios' ? 99 : 0;
 
       this.context = await initLlama({
         model: modelPath,
-        use_mlock: false, // Disable mlock for better compatibility on Android
+        use_mlock: false,
         n_ctx: contextLength,
         n_batch: nBatch,
         n_threads: nThreads,
         n_gpu_layers: nGpuLayers,
-        use_mmap: true, // Memory-mapped files for faster loading
+        use_mmap: true,
         vocab_only: false,
-        // Performance optimizations
-        flash_attn: Platform.OS === 'ios', // Flash attention on iOS (Metal)
-        cache_type_k: 'f16', // Use f16 for KV cache (faster, less memory)
+        flash_attn: Platform.OS === 'ios',
+        cache_type_k: 'f16',
         cache_type_v: 'f16',
       } as any);
 
@@ -145,19 +155,18 @@ class LLMService {
       // Try to initialize multimodal support if mmproj path provided
       if (mmProjPath) {
         await this.initializeMultimodal(mmProjPath);
+      } else {
+        this.multimodalInitialized = false;
+        this.multimodalSupport = { vision: false, audio: false };
       }
 
-      // Check for multimodal support
-      await this.checkMultimodalSupport();
-
-      console.log('Model loaded successfully:', modelPath);
-      console.log('Multimodal support:', this.multimodalSupport);
-    } catch (error) {
-      console.error('Error loading model:', error);
+      console.log('[LLM] Model loaded, vision:', this.multimodalSupport?.vision || false);
+    } catch (error: any) {
+      console.error('[LLM] Error loading model:', error?.message || error);
       this.context = null;
       this.currentModelPath = null;
       this.multimodalSupport = null;
-      throw error;
+      throw new Error(error?.message || 'Unknown error loading model');
     }
   }
 
@@ -165,19 +174,36 @@ class LLMService {
     if (!this.context) return false;
 
     try {
-      // @ts-ignore - llama.rn may have this method for multimodal
-      if (typeof this.context.initMultimodal === 'function') {
-        await this.context.initMultimodal({
-          path: mmProjPath,
-          use_gpu: false, // CPU for compatibility
-        });
+      const success = await this.context.initMultimodal({
+        path: mmProjPath,
+        use_gpu: Platform.OS === 'ios',
+      });
+
+      if (success) {
         this.multimodalInitialized = true;
+        this.multimodalSupport = { vision: true, audio: false };
+
+        try {
+          const support = await this.context.getMultimodalSupport();
+          this.multimodalSupport = {
+            vision: support?.vision || true,
+            audio: support?.audio || false,
+          };
+        } catch (e) {
+          // getMultimodalSupport not available, keep defaults
+        }
         return true;
+      } else {
+        this.multimodalInitialized = false;
+        this.multimodalSupport = { vision: false, audio: false };
+        return false;
       }
-    } catch (error) {
-      console.error('Error initializing multimodal:', error);
+    } catch (error: any) {
+      console.warn('[LLM] Multimodal init failed:', error?.message || error);
+      this.multimodalInitialized = false;
+      this.multimodalSupport = { vision: false, audio: false };
+      return false;
     }
-    return false;
   }
 
   async checkMultimodalSupport(): Promise<MultimodalSupport> {
@@ -257,8 +283,9 @@ class LLMService {
       // Apply context window management to prevent overflow
       const managedMessages = await this.manageContextWindow(messages);
 
-      // Format messages into prompt
-      const prompt = this.formatMessages(managedMessages);
+      // Check if we have images and multimodal is enabled
+      const hasImages = managedMessages.some(m => m.attachments?.some(a => a.type === 'image'));
+      const useMultimodal = hasImages && this.multimodalInitialized;
 
       let fullResponse = '';
       let firstTokenReceived = false;
@@ -275,11 +302,30 @@ class LLMService {
       const topP = settings.topP ?? 0.95;
       const repeatPenalty = settings.repeatPenalty ?? 1.1;
 
-      console.log(`[LLM] Generating with temp=${temperature}, topP=${topP}, maxTokens=${maxTokens}, repeatPenalty=${repeatPenalty}`);
+      // Warn if trying to send images without multimodal
+      if (hasImages && !useMultimodal) {
+        console.warn('[LLM] Images attached but multimodal not initialized - images will be ignored');
+      }
 
-      // Use streaming completion with optimized parameters
-      const result = await this.context.completion(
-        {
+      // Prepare completion params
+      let completionParams: any;
+
+      if (useMultimodal) {
+        // Convert to OpenAI-compatible message format with images
+        const oaiMessages = this.convertToOAIMessages(managedMessages);
+        completionParams = {
+          messages: oaiMessages,
+          n_predict: maxTokens,
+          temperature,
+          top_k: 40,
+          top_p: topP,
+          penalty_repeat: repeatPenalty,
+          stop: ['</s>', '<|end|>', '<|eot_id|>', '<|im_end|>', '<|im_start|>'],
+        };
+      } else {
+        // Use text-only prompt format
+        const prompt = this.formatMessages(managedMessages);
+        completionParams = {
           prompt,
           n_predict: maxTokens,
           temperature,
@@ -287,14 +333,17 @@ class LLMService {
           top_p: topP,
           penalty_repeat: repeatPenalty,
           stop: ['</s>', '<|end|>', '<|eot_id|>', '<|im_end|>', '<|im_start|>'],
-        } as any,
+        };
+      }
+
+      // Use streaming completion
+      await this.context.completion(
+        completionParams,
         (data) => {
           if (data.token) {
-            // Track time to first token
             if (!firstTokenReceived) {
               firstTokenReceived = true;
               firstTokenTime = Date.now() - startTime;
-              console.log(`[LLM] First token received after ${firstTokenTime}ms`);
             }
             tokenCount++;
             fullResponse += data.token;
@@ -475,6 +524,55 @@ class LLMService {
       }
     }
     return uris;
+  }
+
+  // Convert our Message[] to OpenAI-compatible format for multimodal
+  private convertToOAIMessages(messages: Message[]): RNLlamaOAICompatibleMessage[] {
+    return messages.map(message => {
+      // Check if message has image attachments
+      const imageAttachments = message.attachments?.filter(a => a.type === 'image') || [];
+
+      if (imageAttachments.length > 0 && message.role === 'user') {
+        // Build content array with images and text
+        const contentParts: RNLlamaMessagePart[] = [];
+
+        // Add images first
+        for (const attachment of imageAttachments) {
+          // Convert URI to file path format expected by llama.rn
+          let imagePath = attachment.uri;
+          // Ensure it starts with file:// for llama.rn
+          if (!imagePath.startsWith('file://') && !imagePath.startsWith('http')) {
+            imagePath = `file://${imagePath}`;
+          }
+
+          contentParts.push({
+            type: 'image_url',
+            image_url: {
+              url: imagePath,
+            },
+          });
+        }
+
+        // Add text content
+        if (message.content) {
+          contentParts.push({
+            type: 'text',
+            text: message.content,
+          });
+        }
+
+        return {
+          role: message.role,
+          content: contentParts,
+        };
+      }
+
+      // Regular text-only message
+      return {
+        role: message.role,
+        content: message.content,
+      };
+    });
   }
 
   // Get model info from loaded context

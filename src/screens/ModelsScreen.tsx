@@ -343,6 +343,7 @@ export const ModelsScreen: React.FC = () => {
         <Text style={styles.sectionTitle}>Available Files</Text>
         <Text style={styles.sectionSubtitle}>
           Choose a quantization level. Q4_K_M is recommended for mobile.
+          {modelFiles.some(f => f.mmProjFile) && ' Vision files include mmproj.'}
         </Text>
 
         {isLoadingFiles ? (

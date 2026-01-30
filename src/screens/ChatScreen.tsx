@@ -129,18 +129,34 @@ export const ChatScreen: React.FC = () => {
     if (!activeModel) return;
 
     const loadedPath = llmService.getLoadedModelPath();
-    if (loadedPath === activeModel.filePath) {
-      return; // Already loaded
+    const currentVisionSupport = llmService.getMultimodalSupport()?.vision || false;
+
+    // Check if we need to reload: different model OR vision model loaded without mmproj
+    const needsReload = loadedPath !== activeModel.filePath ||
+      (activeModel.mmProjPath && !currentVisionSupport);
+
+    if (!needsReload && loadedPath === activeModel.filePath) {
+      // Already loaded correctly
+      setSupportsVision(currentVisionSupport);
+      return;
     }
 
     setIsModelLoading(true);
     try {
-      await llmService.loadModel(activeModel.filePath);
-      // Check vision support after loading
+      if (!activeModel.filePath) {
+        throw new Error('Model filePath is undefined');
+      }
+
+      // Force unload if reloading for mmproj
+      if (loadedPath === activeModel.filePath && activeModel.mmProjPath) {
+        await llmService.unloadModel();
+      }
+
+      await llmService.loadModel(activeModel.filePath, activeModel.mmProjPath);
       const multimodalSupport = llmService.getMultimodalSupport();
       setSupportsVision(multimodalSupport?.vision || false);
-    } catch (error) {
-      Alert.alert('Error', `Failed to load model: ${(error as Error).message}`);
+    } catch (error: any) {
+      Alert.alert('Error', `Failed to load model: ${error?.message || 'Unknown error'}`);
     } finally {
       setIsModelLoading(false);
     }
@@ -155,7 +171,7 @@ export const ChatScreen: React.FC = () => {
 
     setIsModelLoading(true);
     try {
-      await llmService.loadModel(model.filePath);
+      await llmService.loadModel(model.filePath, model.mmProjPath);
       setActiveModelId(model.id);
       // Check vision support after loading
       const multimodalSupport = llmService.getMultimodalSupport();

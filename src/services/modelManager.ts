@@ -81,60 +81,139 @@ class ModelManager {
       await this.initialize();
 
       const localPath = `${this.modelsDir}/${file.name}`;
+      const mmProjLocalPath = file.mmProjFile
+        ? `${this.modelsDir}/${file.mmProjFile.name}`
+        : null;
 
-      // Check if file already exists
-      const exists = await RNFS.exists(localPath);
-      if (exists) {
-        // Model already downloaded, just add to list
-        const model = await this.addDownloadedModel(modelId, file, localPath);
+      // Calculate combined size for progress tracking
+      const totalSize = file.size + (file.mmProjFile?.size || 0);
+
+      let mainBytesDownloaded = 0;
+      let mmProjBytesDownloaded = 0;
+
+      // Check if files already exist
+      const mainExists = await RNFS.exists(localPath);
+      const mmProjExists = mmProjLocalPath ? await RNFS.exists(mmProjLocalPath) : true;
+
+      if (mainExists && mmProjExists) {
+        // All files already downloaded, just add to list
+        const model = await this.addDownloadedModel(
+          modelId,
+          file,
+          localPath,
+          mmProjLocalPath || undefined,
+          file.mmProjFile
+        );
         onComplete?.(model);
         return;
       }
 
-      const downloadUrl = huggingFaceService.getDownloadUrl(modelId, file.name);
+      // Download main model file if needed
+      if (!mainExists) {
+        const downloadUrl = huggingFaceService.getDownloadUrl(modelId, file.name);
 
-      const downloadResult = RNFS.downloadFile({
-        fromUrl: downloadUrl,
-        toFile: localPath,
-        background: true,
-        discretionary: true,
-        cacheable: false,
-        progressInterval: 500,
-        progressDivider: 1,
-        begin: (res) => {
-          console.log('Download started:', res);
-        },
-        progress: (res) => {
-          const progress: DownloadProgress = {
-            modelId,
-            fileName: file.name,
-            bytesDownloaded: res.bytesWritten,
-            totalBytes: res.contentLength,
-            progress: res.bytesWritten / res.contentLength,
-          };
-          onProgress?.(progress);
-        },
-      });
+        const downloadResult = RNFS.downloadFile({
+          fromUrl: downloadUrl,
+          toFile: localPath,
+          background: true,
+          discretionary: true,
+          cacheable: false,
+          progressInterval: 500,
+          progressDivider: 1,
+          begin: (res) => {
+            console.log('Main model download started:', res);
+          },
+          progress: (res) => {
+            mainBytesDownloaded = res.bytesWritten;
+            const progress: DownloadProgress = {
+              modelId,
+              fileName: file.name,
+              bytesDownloaded: mainBytesDownloaded + mmProjBytesDownloaded,
+              totalBytes: totalSize,
+              progress: (mainBytesDownloaded + mmProjBytesDownloaded) / totalSize,
+            };
+            onProgress?.(progress);
+          },
+        });
 
-      // Store the job for cancellation
-      this.downloadJobs.set(downloadKey, {
-        jobId: downloadResult.jobId,
-        cancel: () => RNFS.stopDownload(downloadResult.jobId),
-      });
+        // Store the job for cancellation
+        this.downloadJobs.set(downloadKey, {
+          jobId: downloadResult.jobId,
+          cancel: () => RNFS.stopDownload(downloadResult.jobId),
+        });
 
-      const result = await downloadResult.promise;
+        const result = await downloadResult.promise;
+
+        if (result.statusCode !== 200) {
+          this.downloadJobs.delete(downloadKey);
+          await RNFS.unlink(localPath).catch(() => {});
+          throw new Error(`Main model download failed with status ${result.statusCode}`);
+        }
+
+        mainBytesDownloaded = file.size;
+      } else {
+        mainBytesDownloaded = file.size;
+      }
+
+      // Download mmproj file if needed
+      if (file.mmProjFile && mmProjLocalPath && !mmProjExists) {
+        const mmProjDownloadKey = `${modelId}/${file.mmProjFile.name}`;
+
+        const mmProjDownloadResult = RNFS.downloadFile({
+          fromUrl: file.mmProjFile.downloadUrl,
+          toFile: mmProjLocalPath,
+          background: true,
+          discretionary: true,
+          cacheable: false,
+          progressInterval: 500,
+          progressDivider: 1,
+          begin: (res) => {
+            console.log('MMProj download started:', res);
+          },
+          progress: (res) => {
+            mmProjBytesDownloaded = res.bytesWritten;
+            const progress: DownloadProgress = {
+              modelId,
+              fileName: file.mmProjFile!.name,
+              bytesDownloaded: mainBytesDownloaded + mmProjBytesDownloaded,
+              totalBytes: totalSize,
+              progress: (mainBytesDownloaded + mmProjBytesDownloaded) / totalSize,
+            };
+            onProgress?.(progress);
+          },
+        });
+
+        // Update job for mmproj cancellation
+        this.downloadJobs.set(mmProjDownloadKey, {
+          jobId: mmProjDownloadResult.jobId,
+          cancel: () => RNFS.stopDownload(mmProjDownloadResult.jobId),
+        });
+
+        const mmProjResult = await mmProjDownloadResult.promise;
+        this.downloadJobs.delete(mmProjDownloadKey);
+
+        if (mmProjResult.statusCode !== 200) {
+          await RNFS.unlink(mmProjLocalPath).catch(() => {});
+          // Don't fail the whole download - just log and continue without mmproj
+          console.warn(`MMProj download failed with status ${mmProjResult.statusCode}`);
+        }
+      }
 
       // Remove from active jobs
       this.downloadJobs.delete(downloadKey);
 
-      if (result.statusCode === 200) {
-        const model = await this.addDownloadedModel(modelId, file, localPath);
-        onComplete?.(model);
-      } else {
-        // Clean up partial download
-        await RNFS.unlink(localPath).catch(() => {});
-        throw new Error(`Download failed with status ${result.statusCode}`);
-      }
+      // Check if mmproj was successfully downloaded
+      const mmProjFileExists = mmProjLocalPath ? await RNFS.exists(mmProjLocalPath) : false;
+      const finalMmProjPath = mmProjLocalPath && mmProjFileExists ? mmProjLocalPath : undefined;
+
+      const model = await this.addDownloadedModel(
+        modelId,
+        file,
+        localPath,
+        finalMmProjPath,
+        finalMmProjPath ? file.mmProjFile : undefined
+      );
+      onComplete?.(model);
     } catch (error) {
       this.downloadJobs.delete(downloadKey);
       onError?.(error as Error);
@@ -164,8 +243,15 @@ class ModelManager {
       throw new Error('Model not found');
     }
 
-    // Delete the file
+    // Delete the main model file
     await RNFS.unlink(model.filePath);
+
+    // Delete the mmproj file if it exists
+    if (model.mmProjPath) {
+      await RNFS.unlink(model.mmProjPath).catch(() => {
+        console.log('MMProj file already deleted or not found');
+      });
+    }
 
     // Update the stored list
     const updatedModels = models.filter(m => m.id !== modelId);
@@ -180,7 +266,9 @@ class ModelManager {
 
   async getStorageUsed(): Promise<number> {
     const models = await this.getDownloadedModels();
-    return models.reduce((total, model) => total + model.fileSize, 0);
+    return models.reduce((total, model) => {
+      return total + model.fileSize + (model.mmProjFileSize || 0);
+    }, 0);
   }
 
   async getAvailableStorage(): Promise<number> {
@@ -475,7 +563,9 @@ class ModelManager {
   private async addDownloadedModel(
     modelId: string,
     file: ModelFile,
-    localPath: string
+    localPath: string,
+    mmProjPath?: string,
+    mmProjFile?: { name: string; size: number }
   ): Promise<DownloadedModel> {
     const stat = await RNFS.stat(localPath);
     const author = modelId.split('/')[0] || 'Unknown';
@@ -490,6 +580,11 @@ class ModelManager {
       quantization: file.quantization,
       downloadedAt: new Date().toISOString(),
       credibility: this.determineCredibility(author),
+      // Vision model support
+      isVisionModel: !!mmProjPath,
+      mmProjPath,
+      mmProjFileName: mmProjFile?.name,
+      mmProjFileSize: mmProjFile?.size,
     };
 
     const models = await this.getDownloadedModels();

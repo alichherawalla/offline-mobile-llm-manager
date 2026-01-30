@@ -48,7 +48,13 @@ export const ModelCard: React.FC<ModelCardProps> = ({
     ? QUANTIZATION_INFO[downloadedModel.quantization] || null
     : null;
 
-  const fileSize = file?.size || downloadedModel?.fileSize || 0;
+  // Calculate total size including mmproj if present
+  const mainFileSize = file?.size || downloadedModel?.fileSize || 0;
+  const mmProjSize = file?.mmProjFile?.size || downloadedModel?.mmProjFileSize || 0;
+  const fileSize = mainFileSize + mmProjSize;
+
+  // Check if this is a vision model
+  const isVisionModel = !!(file?.mmProjFile || downloadedModel?.isVisionModel);
 
   // Calculate size range from model files (for browsing view)
   const sizeRange = React.useMemo(() => {
@@ -159,6 +165,11 @@ export const ModelCard: React.FC<ModelCardProps> = ({
         {quantInfo && (
           <View style={styles.infoBadge}>
             <Text style={styles.infoText}>{quantInfo.quality}</Text>
+          </View>
+        )}
+        {isVisionModel && (
+          <View style={styles.visionBadge}>
+            <Text style={styles.visionText}>Vision</Text>
           </View>
         )}
         {!isCompatible && (
@@ -336,6 +347,17 @@ const styles = StyleSheet.create({
     color: COLORS.warning,
     fontSize: 12,
     fontWeight: '500',
+  },
+  visionBadge: {
+    backgroundColor: COLORS.secondary + '30',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  visionText: {
+    color: COLORS.secondary,
+    fontSize: 12,
+    fontWeight: '600',
   },
   statsRow: {
     flexDirection: 'row',
