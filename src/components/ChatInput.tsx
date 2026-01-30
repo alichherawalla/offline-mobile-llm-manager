@@ -11,20 +11,25 @@ import {
   Alert,
 } from 'react-native';
 import { launchImageLibrary, launchCamera, Asset } from 'react-native-image-picker';
+import Icon from 'react-native-vector-icons/Feather';
 import { COLORS } from '../constants';
-import { MediaAttachment } from '../types';
+import { MediaAttachment, ImageModeState } from '../types';
 import { VoiceRecordButton } from './VoiceRecordButton';
 import { useWhisperTranscription } from '../hooks/useWhisperTranscription';
-import { useWhisperStore } from '../stores';
+import { useWhisperStore, useAppStore } from '../stores';
 
 interface ChatInputProps {
-  onSend: (message: string, attachments?: MediaAttachment[]) => void;
+  onSend: (message: string, attachments?: MediaAttachment[], forceImageMode?: boolean) => void;
   onStop?: () => void;
   disabled?: boolean;
   isGenerating?: boolean;
   placeholder?: string;
   supportsVision?: boolean;
   conversationId?: string | null;
+  imageModelLoaded?: boolean;
+  onImageModeChange?: (mode: ImageModeState) => void;
+  onOpenSettings?: () => void;
+  activeImageModelName?: string | null;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -35,9 +40,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   placeholder = 'Type a message...',
   supportsVision = false,
   conversationId,
+  imageModelLoaded = false,
+  onImageModeChange,
+  onOpenSettings,
+  activeImageModelName,
 }) => {
   const [message, setMessage] = useState('');
   const [attachments, setAttachments] = useState<MediaAttachment[]>([]);
+  const [imageMode, setImageMode] = useState<ImageModeState>('auto');
+
+  const { settings } = useAppStore();
 
   // Track which conversation the recording was started in
   const recordingConversationIdRef = useRef<string | null>(null);
@@ -92,11 +104,33 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleSend = () => {
     if ((message.trim() || attachments.length > 0) && !disabled) {
-      onSend(message.trim(), attachments.length > 0 ? attachments : undefined);
+      const forceImage = imageMode === 'force';
+      onSend(message.trim(), attachments.length > 0 ? attachments : undefined, forceImage);
       setMessage('');
       setAttachments([]);
       Keyboard.dismiss();
+      // Reset to auto mode after sending with force mode
+      if (forceImage) {
+        setImageMode('auto');
+        onImageModeChange?.('auto');
+      }
     }
+  };
+
+  const handleImageModeToggle = () => {
+    if (!imageModelLoaded) {
+      Alert.alert(
+        'No Image Model',
+        'Download an image model from the Models screen to enable image generation.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    // Toggle between auto and force
+    const newMode: ImageModeState = imageMode === 'auto' ? 'force' : 'auto';
+    setImageMode(newMode);
+    onImageModeChange?.(newMode);
   };
 
   const handleStop = () => {
@@ -209,81 +243,114 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         </ScrollView>
       )}
 
-      <View style={styles.inputContainer}>
-        {/* Image picker button - only show if vision is supported */}
-        {supportsVision && (
-          <TouchableOpacity
-            style={styles.attachButton}
-            onPress={handlePickImage}
-            disabled={disabled || isGenerating}
-          >
-            <View style={styles.attachIcon}>
-              <View style={styles.attachIconPlus} />
-              <View style={[styles.attachIconPlus, styles.attachIconPlusVertical]} />
-            </View>
-          </TouchableOpacity>
-        )}
-
-        {/* Voice record button */}
-        <VoiceRecordButton
-          isRecording={isRecording}
-          isAvailable={voiceAvailable}
-          isModelLoading={isModelLoading}
-          isTranscribing={isTranscribing}
-          partialResult={partialResult}
-          error={error}
-          disabled={disabled || isGenerating}
-          onStartRecording={startRecording}
-          onStopRecording={stopRecording}
-          onCancelRecording={() => {
-            stopRecording();
-            clearResult();
-          }}
-        />
-
+      {/* Text Input Row */}
+      <View style={styles.inputRow}>
         <TextInput
-          style={[styles.input, !supportsVision && styles.inputNoAttach]}
+          style={styles.input}
           value={message}
           onChangeText={setMessage}
           placeholder={placeholder}
           placeholderTextColor={COLORS.textMuted}
           multiline
           maxLength={2000}
-          editable={!disabled && !isGenerating}
-          returnKeyType="send"
-          onSubmitEditing={handleSend}
+          editable={!disabled}
         />
-
-        <TouchableOpacity
-          style={[
-            styles.sendButton,
-            isGenerating ? styles.stopButton : null,
-            !canSend && styles.sendButtonDisabled,
-          ]}
-          onPress={isGenerating ? handleStop : handleSend}
-          disabled={!canSend && !isGenerating}
-        >
-          <View
-            style={[
-              styles.sendIcon,
-              isGenerating ? styles.stopIcon : null,
-            ]}
-          />
-        </TouchableOpacity>
       </View>
 
-      {/* Vision support indicator */}
-      {supportsVision && (
-        <Text style={styles.visionHint}>This model supports images</Text>
-      )}
+      {/* Toolbar Row */}
+      <View style={styles.toolbarRow}>
+        {/* Left side: Vision, Image Gen (manual only), Status */}
+        <View style={styles.toolbarLeft}>
+          {/* Image picker button - only show if vision is supported */}
+          {supportsVision && (
+            <TouchableOpacity
+              style={styles.toolbarButton}
+              onPress={handlePickImage}
+              disabled={disabled || isGenerating}
+            >
+              <Icon name="camera" size={20} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          )}
+
+          {/* Image generation mode toggle - only show in manual mode */}
+          {settings.imageGenerationMode === 'manual' && imageModelLoaded && (
+            <TouchableOpacity
+              style={[
+                styles.imageGenButton,
+                imageMode === 'force' && styles.imageGenButtonForce,
+              ]}
+              onPress={handleImageModeToggle}
+              disabled={disabled || isGenerating}
+            >
+              <Icon
+                name="image"
+                size={18}
+                color={imageMode === 'force' ? COLORS.primary : COLORS.textSecondary}
+              />
+              {imageMode === 'force' && (
+                <Text style={styles.imageGenLabelForce}>ON</Text>
+              )}
+            </TouchableOpacity>
+          )}
+
+          {/* Status indicators */}
+          <View style={styles.statusIndicators}>
+            {supportsVision && (
+              <Text style={styles.statusText}>Vision</Text>
+            )}
+            {activeImageModelName && settings.imageGenerationMode === 'auto' && (
+              <Text style={styles.statusText} numberOfLines={1}>
+                Auto: {activeImageModelName}
+              </Text>
+            )}
+          </View>
+        </View>
+
+        {/* Right side: Voice & Send */}
+        <View style={styles.toolbarRight}>
+          {/* Voice record button */}
+          <VoiceRecordButton
+            isRecording={isRecording}
+            isAvailable={voiceAvailable}
+            isModelLoading={isModelLoading}
+            isTranscribing={isTranscribing}
+            partialResult={partialResult}
+            error={error}
+            disabled={disabled || isGenerating}
+            onStartRecording={startRecording}
+            onStopRecording={stopRecording}
+            onCancelRecording={() => {
+              stopRecording();
+              clearResult();
+            }}
+          />
+
+          {/* Send/Stop button */}
+          <TouchableOpacity
+            style={[
+              styles.sendButton,
+              isGenerating ? styles.stopButton : null,
+              !canSend && !isGenerating && styles.sendButtonDisabled,
+            ]}
+            onPress={isGenerating ? handleStop : handleSend}
+            disabled={!canSend && !isGenerating}
+          >
+            <Icon
+              name={isGenerating ? 'square' : 'send'}
+              size={18}
+              color={COLORS.text}
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     backgroundColor: COLORS.background,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
@@ -322,55 +389,79 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginTop: -2,
   },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  inputRow: {
     backgroundColor: COLORS.surface,
-    borderRadius: 24,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    minHeight: 48,
-    gap: 6,
-  },
-  attachButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.surfaceLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  attachIcon: {
-    width: 16,
-    height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  attachIconPlus: {
-    position: 'absolute',
-    width: 12,
-    height: 2,
-    backgroundColor: COLORS.textSecondary,
-    borderRadius: 1,
-  },
-  attachIconPlusVertical: {
-    transform: [{ rotate: '90deg' }],
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginBottom: 8,
   },
   input: {
-    flex: 1,
     color: COLORS.text,
     fontSize: 16,
+    minHeight: 44,
     maxHeight: 100,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
+    textAlignVertical: 'top',
   },
-  inputNoAttach: {
-    paddingLeft: 8,
+  toolbarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  toolbarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  toolbarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  toolbarButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageGenButton: {
+    height: 38,
+    paddingHorizontal: 12,
+    borderRadius: 19,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 4,
+  },
+  imageGenButtonForce: {
+    backgroundColor: COLORS.primary + '30',
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  imageGenLabelForce: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  statusIndicators: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 4,
+    marginLeft: 4,
+  },
+  statusText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
   },
   sendButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -380,30 +471,5 @@ const styles = StyleSheet.create({
   },
   stopButton: {
     backgroundColor: COLORS.error,
-  },
-  sendIcon: {
-    width: 0,
-    height: 0,
-    marginLeft: 3,
-    borderLeftWidth: 9,
-    borderLeftColor: COLORS.text,
-    borderTopWidth: 5,
-    borderTopColor: 'transparent',
-    borderBottomWidth: 5,
-    borderBottomColor: 'transparent',
-  },
-  stopIcon: {
-    marginLeft: 0,
-    borderLeftWidth: 0,
-    width: 10,
-    height: 10,
-    backgroundColor: COLORS.text,
-    borderRadius: 2,
-  },
-  visionHint: {
-    fontSize: 11,
-    color: COLORS.secondary,
-    textAlign: 'center',
-    marginTop: 4,
   },
 });
