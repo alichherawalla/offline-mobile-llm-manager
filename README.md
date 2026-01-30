@@ -156,7 +156,7 @@ Optional passphrase lock protects your conversations. Device information helps y
 
 ### Option 1: Install Pre-built APK
 
-1. Download the APK: **[LocalLLM-v1.0.0-debug.apk](releases/LocalLLM-v1.0.0-debug.apk)** (~245 MB)
+1. Download the APK: **[LocalLLM-v1.0.0.apk](releases/LocalLLM-v1.0.0.apk)** (~166 MB)
 2. Transfer to your Android device
 3. Enable "Install from Unknown Sources" in Settings
 4. Install and launch LocalLLM
