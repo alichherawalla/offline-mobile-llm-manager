@@ -608,27 +608,34 @@ export const ChatScreen: React.FC = () => {
   };
 
   const handleStop = async () => {
-    // Stop text generation
+    // Stop text generation - update UI immediately, then stop native
     const targetConversationId = generatingForConversationRef.current;
     const generationTime = generationStartTimeRef.current
       ? Date.now() - generationStartTimeRef.current
       : undefined;
     generatingForConversationRef.current = null;
     generationStartTimeRef.current = null;
-    await llmService.stopGeneration();
+
+    // Finalize/clear UI state immediately for responsive feedback
     if (targetConversationId && streamingMessage.trim()) {
       finalizeStreamingMessage(targetConversationId, generationTime);
     } else {
       clearStreamingMessage();
     }
 
+    // Then stop the native generation (don't await - let it happen in background)
+    llmService.stopGeneration().catch(() => {
+      // Ignore errors - generation may have already finished
+    });
+
     // Stop image generation if in progress
     if (isGeneratingImage) {
       setImageGenerationStatus('Cancelling...');
-      await onnxImageGeneratorService.cancelGeneration();
       setIsGeneratingImage(false);
       setImageGenerationProgress(null);
       setImageGenerationStatus(null);
+      // Cancel native generation in background
+      onnxImageGeneratorService.cancelGeneration().catch(() => {});
     }
   };
 

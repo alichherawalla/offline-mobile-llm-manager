@@ -340,6 +340,10 @@ class LLMService {
       await this.context.completion(
         completionParams,
         (data) => {
+          // Check if generation was stopped - ignore any pending tokens
+          if (!this.isGenerating) {
+            return;
+          }
           if (data.token) {
             if (!firstTokenReceived) {
               firstTokenReceived = true;
