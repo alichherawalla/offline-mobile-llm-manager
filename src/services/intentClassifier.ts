@@ -1,4 +1,5 @@
 import { llmService } from './llm';
+import { activeModelService } from './activeModelService';
 import { DownloadedModel, ModelLoadingStrategy } from '../types';
 
 export type Intent = 'image' | 'text';
@@ -233,19 +234,22 @@ Message: "${message.slice(0, 200)}"
 
 Answer:`;
 
-    let originalModelPath: string | null = null;
+    let originalModelId: string | null = null;
     let needsModelSwap = false;
 
     // Check if we need to swap models
-    if (opts.classifierModel && opts.classifierModel.filePath) {
+    if (opts.classifierModel && opts.classifierModel.id) {
       const currentPath = llmService.getLoadedModelPath();
       if (currentPath !== opts.classifierModel.filePath) {
         needsModelSwap = true;
-        originalModelPath = currentPath;
+        // Store original model ID from the store (not path)
+        const activeInfo = activeModelService.getActiveModels();
+        originalModelId = activeInfo.text.model?.id || null;
 
         console.log('[IntentClassifier] Swapping to classifier model:', opts.classifierModel.name);
         opts.onStatusChange?.(`Loading ${opts.classifierModel.name}...`);
-        await llmService.loadModel(opts.classifierModel.filePath);
+        // Use activeModelService singleton to load - prevents duplicate loads
+        await activeModelService.loadTextModel(opts.classifierModel.id);
       }
     }
 
@@ -281,10 +285,11 @@ Answer:`;
       // In 'memory' mode, we don't reload the original model to save memory
       // The ChatScreen will reload it on-demand when needed for text generation
       const strategy = opts.modelLoadingStrategy ?? 'performance';
-      if (needsModelSwap && originalModelPath && strategy === 'performance') {
+      if (needsModelSwap && originalModelId && strategy === 'performance') {
         console.log('[IntentClassifier] Swapping back to original model (performance mode)');
         opts.onStatusChange?.('Restoring text model...');
-        await llmService.loadModel(originalModelPath);
+        // Use activeModelService singleton to load
+        await activeModelService.loadTextModel(originalModelId);
       } else if (needsModelSwap && strategy === 'memory') {
         console.log('[IntentClassifier] Keeping classifier model loaded (memory mode - will reload text model on demand)');
       }

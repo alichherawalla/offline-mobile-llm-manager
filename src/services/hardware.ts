@@ -1,4 +1,5 @@
 import DeviceInfo from 'react-native-device-info';
+import { NativeModules, Platform } from 'react-native';
 import { DeviceInfo as DeviceInfoType, ModelRecommendation } from '../types';
 import { MODEL_RECOMMENDATIONS, RECOMMENDED_MODELS } from '../constants';
 
@@ -40,15 +41,37 @@ class HardwareService {
   }
 
   async refreshMemoryInfo(): Promise<DeviceInfoType> {
-    const usedMemory = await DeviceInfo.getUsedMemory();
+    // Force fresh fetch of all memory info
+    const [totalMemory, usedMemory] = await Promise.all([
+      DeviceInfo.getTotalMemory(),
+      DeviceInfo.getUsedMemory(),
+    ]);
 
-    if (this.cachedDeviceInfo) {
-      this.cachedDeviceInfo.usedMemory = usedMemory;
-      this.cachedDeviceInfo.availableMemory =
-        this.cachedDeviceInfo.totalMemory - usedMemory;
+    if (!this.cachedDeviceInfo) {
+      await this.getDeviceInfo();
     }
 
-    return this.getDeviceInfo();
+    if (this.cachedDeviceInfo) {
+      this.cachedDeviceInfo.totalMemory = totalMemory;
+      this.cachedDeviceInfo.usedMemory = usedMemory;
+      this.cachedDeviceInfo.availableMemory = totalMemory - usedMemory;
+    }
+
+    return this.cachedDeviceInfo!;
+  }
+
+  /**
+   * Get app-specific memory usage (more accurate for tracking model memory)
+   * Note: This is system memory, native allocations may not be fully reflected
+   */
+  async getAppMemoryUsage(): Promise<{ used: number; available: number; total: number }> {
+    const total = await DeviceInfo.getTotalMemory();
+    const used = await DeviceInfo.getUsedMemory();
+    return {
+      used,
+      available: total - used,
+      total,
+    };
   }
 
   getTotalMemoryGB(): number {
