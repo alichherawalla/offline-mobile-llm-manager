@@ -232,12 +232,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
         {/* Resource Monitor */}
         {resourceUsage && (
-          <View style={styles.resourceCard}>
+          <TouchableOpacity
+            style={styles.resourceCard}
+            onPress={refreshResourceUsage}
+            activeOpacity={0.7}
+          >
             <View style={styles.resourceRow}>
               <View style={styles.resourceItem}>
                 <View style={styles.resourceHeader}>
-                  <Icon name="cpu" size={14} color={COLORS.textMuted} />
+                  <Icon name="activity" size={14} color={COLORS.textMuted} />
                   <Text style={styles.resourceLabel}>Memory</Text>
+                  <Icon name="refresh-cw" size={12} color={COLORS.textMuted} style={styles.refreshIcon} />
                 </View>
                 <View style={styles.resourceBarContainer}>
                   <View
@@ -271,7 +276,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 </TouchableOpacity>
               )}
             </View>
-          </View>
+          </TouchableOpacity>
         )}
 
         {/* Active Models Section */}
@@ -615,6 +620,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textMuted,
     fontWeight: '500',
+  },
+  refreshIcon: {
+    marginLeft: 'auto',
   },
   resourceBarContainer: {
     height: 6,
