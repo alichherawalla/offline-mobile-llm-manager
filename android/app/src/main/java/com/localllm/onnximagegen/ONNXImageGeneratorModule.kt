@@ -137,21 +137,16 @@ class ONNXImageGeneratorModule(reactContext: ReactApplicationContext) :
                     ortEnv = OrtEnvironment.getEnvironment()
                 }
 
-                // Configure session options for CPU (text_encoder and vae_decoder)
+                // Configure session options - ALL_OPT for best runtime performance
                 val cpuSessionOptions = OrtSession.SessionOptions().apply {
                     setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-                    setIntraOpNumThreads(4)
-                    setInterOpNumThreads(2)
-                    setMemoryPatternOptimization(true)
+                    setIntraOpNumThreads(Runtime.getRuntime().availableProcessors())
                 }
 
-                // Configure session options for UNet with NNAPI (GPU acceleration)
+                // UNet session with NNAPI for GPU acceleration
                 val unetSessionOptions = OrtSession.SessionOptions().apply {
                     setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-                    setIntraOpNumThreads(4)
-                    setInterOpNumThreads(2)
-                    setMemoryPatternOptimization(true)
-                    // Enable NNAPI for GPU acceleration on Adreno
+                    setIntraOpNumThreads(Runtime.getRuntime().availableProcessors())
                     try {
                         addNnapi()
                         Log.d(TAG, "NNAPI execution provider enabled for UNet")
