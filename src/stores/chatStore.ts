@@ -10,6 +10,7 @@ interface ChatState {
 
   // Current message being streamed
   streamingMessage: string;
+  streamingForConversationId: string | null; // Which conversation is being generated for
   isStreaming: boolean;
   isThinking: boolean; // True when processing prompt, before first token
 
@@ -27,12 +28,14 @@ interface ChatState {
   deleteMessagesAfter: (conversationId: string, messageId: string) => void;
 
   // Streaming
+  startStreaming: (conversationId: string) => void;
   setStreamingMessage: (content: string) => void;
   appendToStreamingMessage: (token: string) => void;
   setIsStreaming: (streaming: boolean) => void;
   setIsThinking: (thinking: boolean) => void;
   finalizeStreamingMessage: (conversationId: string, generationTimeMs?: number) => void;
   clearStreamingMessage: () => void;
+  getStreamingState: () => { conversationId: string | null; content: string; isStreaming: boolean; isThinking: boolean };
 
   // Utilities
   clearAllConversations: () => void;
@@ -47,6 +50,7 @@ export const useChatStore = create<ChatState>()(
       conversations: [],
       activeConversationId: null,
       streamingMessage: '',
+      streamingForConversationId: null,
       isStreaming: false,
       isThinking: false,
 
@@ -85,13 +89,9 @@ export const useChatStore = create<ChatState>()(
       },
 
       setActiveConversation: (conversationId) => {
-        // Clear any streaming state when switching conversations
-        set({
-          activeConversationId: conversationId,
-          streamingMessage: '',
-          isStreaming: false,
-          isThinking: false,
-        });
+        // Don't clear streaming state - generation may be in progress for another conversation
+        // The UI should check streamingForConversationId to know if streaming applies to current view
+        set({ activeConversationId: conversationId });
       },
 
       getActiveConversation: () => {
@@ -182,6 +182,15 @@ export const useChatStore = create<ChatState>()(
         }));
       },
 
+      startStreaming: (conversationId) => {
+        set({
+          streamingForConversationId: conversationId,
+          streamingMessage: '',
+          isStreaming: false,
+          isThinking: true,
+        });
+      },
+
       setStreamingMessage: (content) => {
         set({ streamingMessage: content });
       },
@@ -189,6 +198,8 @@ export const useChatStore = create<ChatState>()(
       appendToStreamingMessage: (token) => {
         set((state) => ({
           streamingMessage: state.streamingMessage + token,
+          isStreaming: true,
+          isThinking: false,
         }));
       },
 
@@ -201,18 +212,39 @@ export const useChatStore = create<ChatState>()(
       },
 
       finalizeStreamingMessage: (conversationId, generationTimeMs) => {
-        const { streamingMessage, addMessage } = get();
-        if (streamingMessage.trim()) {
+        const { streamingMessage, streamingForConversationId, addMessage } = get();
+        // Only finalize if this is the conversation we were generating for
+        if (streamingForConversationId === conversationId && streamingMessage.trim()) {
           addMessage(conversationId, {
             role: 'assistant',
             content: streamingMessage.trim(),
           }, undefined, generationTimeMs);
         }
-        set({ streamingMessage: '', isStreaming: false, isThinking: false });
+        set({
+          streamingMessage: '',
+          streamingForConversationId: null,
+          isStreaming: false,
+          isThinking: false,
+        });
       },
 
       clearStreamingMessage: () => {
-        set({ streamingMessage: '', isStreaming: false, isThinking: false });
+        set({
+          streamingMessage: '',
+          streamingForConversationId: null,
+          isStreaming: false,
+          isThinking: false,
+        });
+      },
+
+      getStreamingState: () => {
+        const state = get();
+        return {
+          conversationId: state.streamingForConversationId,
+          content: state.streamingMessage,
+          isStreaming: state.isStreaming,
+          isThinking: state.isThinking,
+        };
       },
 
       clearAllConversations: () => {
