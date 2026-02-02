@@ -1,6 +1,7 @@
 /**
  * ActiveModelService - Singleton for managing active models throughout the app
- * Provides a unified interface for accessing and controlling loaded models
+ * THIS IS THE ONLY PLACE MODELS SHOULD BE LOADED/UNLOADED FROM
+ * All other code should use this service, never call llmService/onnxImageGeneratorService directly
  */
 
 import { llmService } from './llm';
@@ -30,6 +31,7 @@ export interface ResourceUsage {
   memoryTotal: number;
   memoryAvailable: number;
   memoryUsagePercent: number;
+  estimatedModelMemory: number; // Estimated memory used by loaded models (from file sizes)
 }
 
 type ModelChangeListener = (info: ActiveModelInfo) => void;
@@ -40,6 +42,12 @@ class ActiveModelService {
     text: false,
     image: false,
   };
+  // Track what's actually loaded to prevent duplicate loads
+  private loadedTextModelId: string | null = null;
+  private loadedImageModelId: string | null = null;
+  // Promises to prevent concurrent load attempts
+  private textLoadPromise: Promise<void> | null = null;
+  private imageLoadPromise: Promise<void> | null = null;
 
   /**
    * Get current active model info
@@ -72,9 +80,26 @@ class ActiveModelService {
   }
 
   /**
-   * Load a text model
+   * Load a text model - THIS IS THE ONLY PLACE TEXT MODELS SHOULD BE LOADED
+   * Guards against duplicate loading and concurrent load attempts
    */
   async loadTextModel(modelId: string): Promise<void> {
+    // Already loaded this exact model - no-op
+    if (this.loadedTextModelId === modelId && llmService.isModelLoaded()) {
+      console.log('[ActiveModelService] Text model already loaded:', modelId);
+      return;
+    }
+
+    // If already loading, wait for that to complete
+    if (this.textLoadPromise) {
+      console.log('[ActiveModelService] Text model load already in progress, waiting...');
+      await this.textLoadPromise;
+      // Check if the completed load was for our model
+      if (this.loadedTextModelId === modelId) {
+        return;
+      }
+    }
+
     const store = useAppStore.getState();
     const model = store.downloadedModels.find(m => m.id === modelId);
     if (!model) throw new Error('Model not found');
@@ -82,25 +107,54 @@ class ActiveModelService {
     this.loadingState.text = true;
     this.notifyListeners();
 
-    try {
-      await llmService.loadModel(model.filePath, model.mmProjPath);
-      store.setActiveModelId(modelId);
-    } finally {
-      this.loadingState.text = false;
-      this.notifyListeners();
-    }
+    // Create and track the load promise
+    this.textLoadPromise = (async () => {
+      try {
+        // Unload existing model first if different
+        if (this.loadedTextModelId && this.loadedTextModelId !== modelId) {
+          console.log('[ActiveModelService] Unloading previous text model:', this.loadedTextModelId);
+          await llmService.unloadModel();
+          this.loadedTextModelId = null;
+        }
+
+        console.log('[ActiveModelService] Loading text model:', modelId);
+        await llmService.loadModel(model.filePath, model.mmProjPath);
+        this.loadedTextModelId = modelId;
+        store.setActiveModelId(modelId);
+        console.log('[ActiveModelService] Text model loaded successfully:', modelId);
+      } finally {
+        this.loadingState.text = false;
+        this.textLoadPromise = null;
+        this.notifyListeners();
+      }
+    })();
+
+    await this.textLoadPromise;
   }
 
   /**
    * Unload the current text model
    */
   async unloadTextModel(): Promise<void> {
+    // Wait for any pending load to complete first
+    if (this.textLoadPromise) {
+      await this.textLoadPromise;
+    }
+
+    if (!this.loadedTextModelId && !llmService.isModelLoaded()) {
+      console.log('[ActiveModelService] No text model loaded to unload');
+      return;
+    }
+
     this.loadingState.text = true;
     this.notifyListeners();
 
     try {
+      console.log('[ActiveModelService] Unloading text model:', this.loadedTextModelId);
       await llmService.unloadModel();
+      this.loadedTextModelId = null;
       useAppStore.getState().setActiveModelId(null);
+      console.log('[ActiveModelService] Text model unloaded');
     } finally {
       this.loadingState.text = false;
       this.notifyListeners();
@@ -108,9 +162,30 @@ class ActiveModelService {
   }
 
   /**
-   * Load an image model
+   * Load an image model - THIS IS THE ONLY PLACE IMAGE MODELS SHOULD BE LOADED
+   * Guards against duplicate loading and concurrent load attempts
+   * Timeout is 3 minutes to allow for first-time optimization (subsequent loads are faster)
    */
-  async loadImageModel(modelId: string): Promise<void> {
+  async loadImageModel(modelId: string, timeoutMs: number = 180000): Promise<void> {
+    // Already loaded this exact model - no-op
+    if (this.loadedImageModelId === modelId) {
+      const isLoaded = await onnxImageGeneratorService.isModelLoaded();
+      if (isLoaded) {
+        console.log('[ActiveModelService] Image model already loaded:', modelId);
+        return;
+      }
+    }
+
+    // If already loading, wait for that to complete
+    if (this.imageLoadPromise) {
+      console.log('[ActiveModelService] Image model load already in progress, waiting...');
+      await this.imageLoadPromise;
+      // Check if the completed load was for our model
+      if (this.loadedImageModelId === modelId) {
+        return;
+      }
+    }
+
     const store = useAppStore.getState();
     const model = store.downloadedImageModels.find(m => m.id === modelId);
     if (!model) throw new Error('Model not found');
@@ -118,25 +193,65 @@ class ActiveModelService {
     this.loadingState.image = true;
     this.notifyListeners();
 
-    try {
-      await onnxImageGeneratorService.loadModel(model.modelPath);
-      store.setActiveImageModelId(modelId);
-    } finally {
-      this.loadingState.image = false;
-      this.notifyListeners();
-    }
+    // Create and track the load promise
+    this.imageLoadPromise = (async () => {
+      try {
+        // Unload existing model first if different
+        if (this.loadedImageModelId && this.loadedImageModelId !== modelId) {
+          console.log('[ActiveModelService] Unloading previous image model:', this.loadedImageModelId);
+          await onnxImageGeneratorService.unloadModel();
+          this.loadedImageModelId = null;
+        }
+
+        console.log('[ActiveModelService] Loading image model:', modelId);
+
+        // Add timeout to prevent hanging forever
+        const loadPromise = onnxImageGeneratorService.loadModel(model.modelPath);
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Image model loading timed out')), timeoutMs);
+        });
+
+        await Promise.race([loadPromise, timeoutPromise]);
+        this.loadedImageModelId = modelId;
+        store.setActiveImageModelId(modelId);
+        console.log('[ActiveModelService] Image model loaded successfully:', modelId);
+      } catch (error) {
+        console.error('[ActiveModelService] Failed to load image model:', error);
+        this.loadedImageModelId = null;
+        throw error;
+      } finally {
+        this.loadingState.image = false;
+        this.imageLoadPromise = null;
+        this.notifyListeners();
+      }
+    })();
+
+    await this.imageLoadPromise;
   }
 
   /**
    * Unload the current image model
    */
   async unloadImageModel(): Promise<void> {
+    // Wait for any pending load to complete first
+    if (this.imageLoadPromise) {
+      await this.imageLoadPromise;
+    }
+
+    if (!this.loadedImageModelId) {
+      console.log('[ActiveModelService] No image model loaded to unload');
+      return;
+    }
+
     this.loadingState.image = true;
     this.notifyListeners();
 
     try {
+      console.log('[ActiveModelService] Unloading image model:', this.loadedImageModelId);
       await onnxImageGeneratorService.unloadModel();
+      this.loadedImageModelId = null;
       useAppStore.getState().setActiveImageModelId(null);
+      console.log('[ActiveModelService] Image model unloaded');
     } finally {
       this.loadingState.image = false;
       this.notifyListeners();
@@ -173,17 +288,90 @@ class ActiveModelService {
   }
 
   /**
-   * Get current resource usage
+   * Get current resource usage with estimated model memory
    */
   async getResourceUsage(): Promise<ResourceUsage> {
     const info = await hardwareService.refreshMemoryInfo();
     const usagePercent = ((info.usedMemory / info.totalMemory) * 100);
+
+    // Calculate estimated model memory from file sizes of loaded models
+    const estimatedModelMemory = this.getEstimatedModelMemory();
 
     return {
       memoryUsed: info.usedMemory,
       memoryTotal: info.totalMemory,
       memoryAvailable: info.availableMemory,
       memoryUsagePercent: usagePercent,
+      estimatedModelMemory,
+    };
+  }
+
+  /**
+   * Estimate memory used by loaded models based on file sizes
+   * Note: Actual memory may be higher due to KV cache, activations, etc.
+   */
+  private getEstimatedModelMemory(): number {
+    const store = useAppStore.getState();
+    let totalMemory = 0;
+
+    // Text model memory (file size + ~20% overhead for KV cache/buffers)
+    if (store.activeModelId) {
+      const textModel = store.downloadedModels.find(m => m.id === store.activeModelId);
+      if (textModel?.fileSize) {
+        totalMemory += textModel.fileSize * 1.2; // 20% overhead
+      }
+    }
+
+    // Image model memory (file size + ~30% overhead for ONNX runtime)
+    if (store.activeImageModelId) {
+      const imageModel = store.downloadedImageModels.find(m => m.id === store.activeImageModelId);
+      if (imageModel?.size) {
+        totalMemory += imageModel.size * 1.3; // 30% overhead
+      }
+    }
+
+    return totalMemory;
+  }
+
+  /**
+   * Clear KV cache to improve performance after many messages
+   */
+  async clearTextModelCache(): Promise<void> {
+    if (llmService.isModelLoaded()) {
+      await llmService.clearKVCache(false);
+    }
+  }
+
+  /**
+   * Check if the service's internal state matches the actual native state
+   * This is useful after app restart when persisted store may be out of sync
+   */
+  async syncWithNativeState(): Promise<void> {
+    // Check text model
+    const textModelLoaded = llmService.isModelLoaded();
+    const textModelPath = llmService.getLoadedModelPath();
+
+    if (!textModelLoaded) {
+      this.loadedTextModelId = null;
+    }
+
+    // Check image model
+    const imageModelLoaded = await onnxImageGeneratorService.isModelLoaded();
+
+    if (!imageModelLoaded) {
+      this.loadedImageModelId = null;
+    }
+
+    console.log('[ActiveModelService] Synced with native state - Text:', textModelLoaded, 'Image:', imageModelLoaded);
+  }
+
+  /**
+   * Get the currently loaded model IDs (from this service's tracking)
+   */
+  getLoadedModelIds(): { textModelId: string | null; imageModelId: string | null } {
+    return {
+      textModelId: this.loadedTextModelId,
+      imageModelId: this.loadedImageModelId,
     };
   }
 

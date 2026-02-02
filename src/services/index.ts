@@ -13,3 +13,5 @@ export type { TranscriptionResult, TranscriptionCallback } from './whisperServic
 export { backgroundDownloadService } from './backgroundDownloadService';
 export { activeModelService } from './activeModelService';
 export type { ActiveModelInfo, ResourceUsage, ModelType } from './activeModelService';
+export { generationService } from './generationService';
+export type { GenerationState } from './generationService';
