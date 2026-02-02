@@ -11,3 +11,5 @@ export { authService } from './authService';
 export { whisperService, WHISPER_MODELS } from './whisperService';
 export type { TranscriptionResult, TranscriptionCallback } from './whisperService';
 export { backgroundDownloadService } from './backgroundDownloadService';
+export { activeModelService } from './activeModelService';
+export type { ActiveModelInfo, ResourceUsage, ModelType } from './activeModelService';
