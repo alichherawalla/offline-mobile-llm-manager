@@ -1142,8 +1142,12 @@ export const ChatScreen: React.FC = () => {
         animationType="slide"
         onRequestClose={() => setShowProjectSelector(false)}
       >
-        <View style={styles.projectModalOverlay}>
-          <View style={styles.projectModal}>
+        <TouchableOpacity
+          style={styles.projectModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowProjectSelector(false)}
+        >
+          <View style={styles.projectModal} onStartShouldSetResponder={() => true}>
             <View style={styles.projectModalHeader}>
               <Text style={styles.projectModalTitle}>Select Project</Text>
               <TouchableOpacity onPress={() => setShowProjectSelector(false)}>
@@ -1200,7 +1204,7 @@ export const ChatScreen: React.FC = () => {
               ))}
             </ScrollView>
           </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
 
       {/* Debug Panel Modal */}
@@ -1210,8 +1214,12 @@ export const ChatScreen: React.FC = () => {
         animationType="slide"
         onRequestClose={() => setShowDebugPanel(false)}
       >
-        <View style={styles.debugModalOverlay}>
-          <View style={styles.debugModal}>
+        <TouchableOpacity
+          style={styles.debugModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowDebugPanel(false)}
+        >
+          <View style={styles.debugModal} onStartShouldSetResponder={() => true}>
             <View style={styles.debugModalHeader}>
               <Text style={styles.debugModalTitle}>Debug Info</Text>
               <TouchableOpacity onPress={() => setShowDebugPanel(false)}>
@@ -1327,7 +1335,7 @@ export const ChatScreen: React.FC = () => {
               </View>
             </ScrollView>
           </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
 
       {/* Model Selector Modal */}

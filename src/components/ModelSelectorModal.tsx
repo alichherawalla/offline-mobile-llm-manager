@@ -104,8 +104,12 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
-        <View style={styles.modal}>
+      <TouchableOpacity
+        style={styles.overlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <View style={styles.modal} onStartShouldSetResponder={() => true}>
           <View style={styles.header}>
             <Text style={styles.title}>Select Model</Text>
             <TouchableOpacity onPress={onClose} disabled={isLoading}>
@@ -245,7 +249,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
             )}
           </ScrollView>
         </View>
-      </View>
+      </TouchableOpacity>
     </Modal>
   );
 };

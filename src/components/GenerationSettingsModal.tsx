@@ -155,8 +155,12 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
-        <View style={styles.modal}>
+      <TouchableOpacity
+        style={styles.overlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <View style={styles.modal} onStartShouldSetResponder={() => true}>
           <View style={styles.header}>
             <Text style={styles.title}>Generation Settings</Text>
             <TouchableOpacity onPress={onClose}>
@@ -570,7 +574,7 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
             <View style={styles.bottomPadding} />
           </ScrollView>
         </View>
-      </View>
+      </TouchableOpacity>
     </Modal>
   );
 };
