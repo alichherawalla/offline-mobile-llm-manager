@@ -14,12 +14,13 @@ import Icon from 'react-native-vector-icons/Feather';
 import { Card, Button } from '../components';
 import { COLORS } from '../constants';
 import { useAppStore } from '../stores';
-import { modelManager, backgroundDownloadService } from '../services';
-import { DownloadedModel, BackgroundDownloadInfo } from '../types';
+import { modelManager, backgroundDownloadService, activeModelService } from '../services';
+import { DownloadedModel, BackgroundDownloadInfo, ONNXImageModel } from '../types';
 import { useNavigation } from '@react-navigation/native';
 
 type DownloadItem = {
   type: 'active' | 'completed';
+  modelType: 'text' | 'image';
   downloadId?: number;
   modelId: string;
   fileName: string;
@@ -46,6 +47,9 @@ export const DownloadManagerScreen: React.FC = () => {
     removeDownloadedModel,
     activeBackgroundDownloads,
     setBackgroundDownload,
+    downloadedImageModels,
+    setDownloadedImageModels,
+    removeDownloadedImageModel,
   } = useAppStore();
 
   // Load active background downloads on mount
@@ -109,6 +113,8 @@ export const DownloadManagerScreen: React.FC = () => {
     await loadActiveDownloads();
     const models = await modelManager.getDownloadedModels();
     setDownloadedModels(models);
+    const imageModels = await modelManager.getDownloadedImageModels();
+    setDownloadedImageModels(imageModels);
     setIsRefreshing(false);
   }, []);
 
@@ -158,6 +164,30 @@ export const DownloadManagerScreen: React.FC = () => {
     );
   };
 
+  const handleDeleteImageModel = async (model: ONNXImageModel) => {
+    Alert.alert(
+      'Delete Image Model',
+      `Are you sure you want to delete "${model.name}"? This will free up ${formatBytes(model.size)}.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Unload if this is the active model
+              await activeModelService.unloadImageModel();
+              await modelManager.deleteImageModel(model.id);
+              removeDownloadedImageModel(model.id);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete image model');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Combine RNFS downloads and background downloads
   const getDownloadItems = (): DownloadItem[] => {
     const items: DownloadItem[] = [];
@@ -169,6 +199,7 @@ export const DownloadManagerScreen: React.FC = () => {
 
       items.push({
         type: 'active',
+        modelType: 'text',
         modelId: fullModelId,
         fileName,
         author: fullModelId.split('/')[0] || 'Unknown',
@@ -191,6 +222,7 @@ export const DownloadManagerScreen: React.FC = () => {
 
       items.push({
         type: 'active',
+        modelType: 'text',
         downloadId: download.downloadId,
         modelId: metadata.modelId,
         fileName: metadata.fileName,
@@ -203,10 +235,11 @@ export const DownloadManagerScreen: React.FC = () => {
       });
     });
 
-    // Add completed downloads
+    // Add completed text model downloads
     downloadedModels.forEach((model) => {
       items.push({
         type: 'completed',
+        modelType: 'text',
         modelId: model.id,
         fileName: model.fileName,
         author: model.author,
@@ -217,6 +250,23 @@ export const DownloadManagerScreen: React.FC = () => {
         status: 'completed',
         downloadedAt: model.downloadedAt,
         filePath: model.filePath,
+      });
+    });
+
+    // Add completed image model downloads
+    downloadedImageModels.forEach((model) => {
+      items.push({
+        type: 'completed',
+        modelType: 'image',
+        modelId: model.id,
+        fileName: model.name,
+        author: 'Image Generation',
+        quantization: 'ONNX',
+        fileSize: model.size,
+        bytesDownloaded: model.size,
+        progress: 1,
+        status: 'completed',
+        filePath: model.modelPath,
       });
     });
 
@@ -275,6 +325,13 @@ export const DownloadManagerScreen: React.FC = () => {
   const renderCompletedItem = ({ item }: { item: DownloadItem }) => (
     <Card style={styles.downloadCard}>
       <View style={styles.downloadHeader}>
+        <View style={styles.modelTypeIcon}>
+          <Icon
+            name={item.modelType === 'image' ? 'image' : 'message-square'}
+            size={16}
+            color={item.modelType === 'image' ? COLORS.secondary : COLORS.primary}
+          />
+        </View>
         <View style={styles.downloadInfo}>
           <Text style={styles.fileName} numberOfLines={1}>
             {item.fileName}
@@ -286,8 +343,13 @@ export const DownloadManagerScreen: React.FC = () => {
         <TouchableOpacity
           style={styles.deleteButton}
           onPress={() => {
-            const model = downloadedModels.find(m => m.id === item.modelId);
-            if (model) handleDeleteModel(model);
+            if (item.modelType === 'image') {
+              const model = downloadedImageModels.find(m => m.id === item.modelId);
+              if (model) handleDeleteImageModel(model);
+            } else {
+              const model = downloadedModels.find(m => m.id === item.modelId);
+              if (model) handleDeleteModel(model);
+            }
           }}
         >
           <Icon name="trash-2" size={18} color={COLORS.error} />
@@ -295,8 +357,10 @@ export const DownloadManagerScreen: React.FC = () => {
       </View>
 
       <View style={styles.downloadMeta}>
-        <View style={styles.quantBadge}>
-          <Text style={styles.quantText}>{item.quantization}</Text>
+        <View style={[styles.quantBadge, item.modelType === 'image' && styles.imageBadge]}>
+          <Text style={[styles.quantText, item.modelType === 'image' && styles.imageQuantText]}>
+            {item.quantization}
+          </Text>
         </View>
         <Text style={styles.sizeText}>{formatBytes(item.fileSize)}</Text>
         {item.downloadedAt && (
@@ -490,6 +554,15 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 12,
   },
+  modelTypeIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: COLORS.surfaceLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
   downloadInfo: {
     flex: 1,
   },
@@ -547,6 +620,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.primary,
+  },
+  imageBadge: {
+    backgroundColor: COLORS.secondary + '25',
+  },
+  imageQuantText: {
+    color: COLORS.secondary,
   },
   statusText: {
     fontSize: 12,
