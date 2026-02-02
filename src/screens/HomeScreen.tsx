@@ -6,6 +6,8 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,8 +15,8 @@ import Icon from 'react-native-vector-icons/Feather';
 import { Button, Card } from '../components';
 import { COLORS } from '../constants';
 import { useAppStore, useChatStore } from '../stores';
-import { modelManager, hardwareService } from '../services';
-import { Conversation } from '../types';
+import { modelManager, hardwareService, llmService, onnxImageGeneratorService } from '../services';
+import { Conversation, DownloadedModel, ONNXImageModel } from '../types';
 import { ChatsStackParamList } from '../navigation/types';
 import { NavigatorScreenParams } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
@@ -33,13 +35,20 @@ type HomeScreenProps = {
   navigation: HomeScreenNavigationProp;
 };
 
+type ModelPickerType = 'text' | 'image' | null;
+
 export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
+  const [pickerType, setPickerType] = useState<ModelPickerType>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
   const {
     downloadedModels,
     setDownloadedModels,
     activeModelId,
+    setActiveModelId,
     downloadedImageModels,
     activeImageModelId,
+    setActiveImageModelId,
     deviceInfo,
     setDeviceInfo,
   } = useAppStore();
@@ -57,6 +66,58 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     }
     const models = await modelManager.getDownloadedModels();
     setDownloadedModels(models);
+  };
+
+  const handleSelectTextModel = async (model: DownloadedModel) => {
+    if (activeModelId === model.id) return;
+
+    setIsLoading(true);
+    try {
+      await llmService.loadModel(model.filePath);
+      setActiveModelId(model.id);
+    } catch (error) {
+      Alert.alert('Error', `Failed to load model: ${(error as Error).message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUnloadTextModel = async () => {
+    setIsLoading(true);
+    try {
+      await llmService.unloadModel();
+      setActiveModelId(null);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to unload model');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSelectImageModel = async (model: ONNXImageModel) => {
+    if (activeImageModelId === model.id) return;
+
+    setIsLoading(true);
+    try {
+      await onnxImageGeneratorService.loadModel(model.modelPath);
+      setActiveImageModelId(model.id);
+    } catch (error) {
+      Alert.alert('Error', `Failed to load model: ${(error as Error).message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUnloadImageModel = async () => {
+    setIsLoading(true);
+    try {
+      await onnxImageGeneratorService.unloadModel();
+      setActiveImageModelId(null);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to unload model');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const startNewChat = () => {
@@ -111,11 +172,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           {/* Text Model */}
           <TouchableOpacity
             style={styles.modelCard}
-            onPress={() => navigation.navigate('ModelsTab')}
+            onPress={() => setPickerType('text')}
           >
             <View style={styles.modelCardHeader}>
               <Icon name="message-square" size={16} color={COLORS.textMuted} />
               <Text style={styles.modelCardLabel}>Text</Text>
+              <Icon name="chevron-down" size={14} color={COLORS.textMuted} />
             </View>
             {activeTextModel ? (
               <>
@@ -127,18 +189,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 </Text>
               </>
             ) : (
-              <Text style={styles.modelCardEmpty}>No model</Text>
+              <Text style={styles.modelCardEmpty}>
+                {downloadedModels.length > 0 ? 'Tap to select' : 'No models'}
+              </Text>
             )}
           </TouchableOpacity>
 
           {/* Image Model */}
           <TouchableOpacity
             style={styles.modelCard}
-            onPress={() => navigation.navigate('ModelsTab')}
+            onPress={() => setPickerType('image')}
           >
             <View style={styles.modelCardHeader}>
               <Icon name="image" size={16} color={COLORS.textMuted} />
               <Text style={styles.modelCardLabel}>Image</Text>
+              <Icon name="chevron-down" size={14} color={COLORS.textMuted} />
             </View>
             {activeImageModel ? (
               <>
@@ -150,7 +215,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 </Text>
               </>
             ) : (
-              <Text style={styles.modelCardEmpty}>No model</Text>
+              <Text style={styles.modelCardEmpty}>
+                {downloadedImageModels.length > 0 ? 'Tap to select' : 'No models'}
+              </Text>
             )}
           </TouchableOpacity>
         </View>
@@ -165,13 +232,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         ) : (
           <Card style={styles.setupCard}>
             <Text style={styles.setupText}>
-              Download a text model to start chatting
+              {downloadedModels.length > 0
+                ? 'Select a text model to start chatting'
+                : 'Download a text model to start chatting'}
             </Text>
             <Button
-              title="Browse Models"
+              title={downloadedModels.length > 0 ? "Select Model" : "Browse Models"}
               variant="outline"
               size="small"
-              onPress={() => navigation.navigate('ModelsTab')}
+              onPress={() => downloadedModels.length > 0 ? setPickerType('text') : navigation.navigate('ModelsTab')}
             />
           </Card>
         )}
@@ -228,6 +297,157 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           </View>
         </View>
       </ScrollView>
+
+      {/* Model Picker Modal */}
+      <Modal
+        visible={pickerType !== null}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setPickerType(null)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setPickerType(null)}
+        >
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {pickerType === 'text' ? 'Text Models' : 'Image Models'}
+              </Text>
+              <TouchableOpacity onPress={() => setPickerType(null)}>
+                <Icon name="x" size={24} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+
+            {isLoading && (
+              <View style={styles.loadingOverlay}>
+                <ActivityIndicator size="small" color={COLORS.text} />
+                <Text style={styles.loadingText}>Loading model...</Text>
+              </View>
+            )}
+
+            <ScrollView style={styles.modalScroll}>
+              {pickerType === 'text' && (
+                <>
+                  {downloadedModels.length === 0 ? (
+                    <View style={styles.emptyPicker}>
+                      <Text style={styles.emptyPickerText}>No text models downloaded</Text>
+                      <Button
+                        title="Browse Models"
+                        variant="outline"
+                        size="small"
+                        onPress={() => {
+                          setPickerType(null);
+                          navigation.navigate('ModelsTab');
+                        }}
+                      />
+                    </View>
+                  ) : (
+                    <>
+                      {activeModelId && (
+                        <TouchableOpacity
+                          style={styles.unloadButton}
+                          onPress={handleUnloadTextModel}
+                          disabled={isLoading}
+                        >
+                          <Icon name="power" size={16} color={COLORS.error} />
+                          <Text style={styles.unloadButtonText}>Unload current model</Text>
+                        </TouchableOpacity>
+                      )}
+                      {downloadedModels.map((model) => (
+                        <TouchableOpacity
+                          key={model.id}
+                          style={[
+                            styles.pickerItem,
+                            activeModelId === model.id && styles.pickerItemActive,
+                          ]}
+                          onPress={() => handleSelectTextModel(model)}
+                          disabled={isLoading}
+                        >
+                          <View style={styles.pickerItemInfo}>
+                            <Text style={styles.pickerItemName}>{model.name}</Text>
+                            <Text style={styles.pickerItemMeta}>
+                              {model.quantization} · {hardwareService.formatBytes(model.fileSize)}
+                            </Text>
+                          </View>
+                          {activeModelId === model.id && (
+                            <Icon name="check" size={18} color={COLORS.text} />
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </>
+                  )}
+                </>
+              )}
+
+              {pickerType === 'image' && (
+                <>
+                  {downloadedImageModels.length === 0 ? (
+                    <View style={styles.emptyPicker}>
+                      <Text style={styles.emptyPickerText}>No image models downloaded</Text>
+                      <Button
+                        title="Browse Models"
+                        variant="outline"
+                        size="small"
+                        onPress={() => {
+                          setPickerType(null);
+                          navigation.navigate('ModelsTab');
+                        }}
+                      />
+                    </View>
+                  ) : (
+                    <>
+                      {activeImageModelId && (
+                        <TouchableOpacity
+                          style={styles.unloadButton}
+                          onPress={handleUnloadImageModel}
+                          disabled={isLoading}
+                        >
+                          <Icon name="power" size={16} color={COLORS.error} />
+                          <Text style={styles.unloadButtonText}>Unload current model</Text>
+                        </TouchableOpacity>
+                      )}
+                      {downloadedImageModels.map((model) => (
+                        <TouchableOpacity
+                          key={model.id}
+                          style={[
+                            styles.pickerItem,
+                            activeImageModelId === model.id && styles.pickerItemActive,
+                          ]}
+                          onPress={() => handleSelectImageModel(model)}
+                          disabled={isLoading}
+                        >
+                          <View style={styles.pickerItemInfo}>
+                            <Text style={styles.pickerItemName}>{model.name}</Text>
+                            <Text style={styles.pickerItemMeta}>
+                              {model.style || 'Image'} · {hardwareService.formatBytes(model.size)}
+                            </Text>
+                          </View>
+                          {activeImageModelId === model.id && (
+                            <Icon name="check" size={18} color={COLORS.text} />
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </>
+                  )}
+                </>
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.browseMoreButton}
+              onPress={() => {
+                setPickerType(null);
+                navigation.navigate('ModelsTab');
+              }}
+            >
+              <Text style={styles.browseMoreText}>Browse more models</Text>
+              <Icon name="arrow-right" size={16} color={COLORS.textMuted} />
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -282,6 +502,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   modelCardLabel: {
+    flex: 1,
     fontSize: 12,
     color: COLORS.textMuted,
     fontWeight: '500',
@@ -385,5 +606,106 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     backgroundColor: COLORS.border,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: COLORS.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '70%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  modalScroll: {
+    padding: 16,
+  },
+  loadingOverlay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    backgroundColor: COLORS.surface,
+    gap: 8,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+  },
+  pickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 8,
+  },
+  pickerItemActive: {
+    backgroundColor: COLORS.surfaceLight,
+  },
+  pickerItemInfo: {
+    flex: 1,
+  },
+  pickerItemName: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: COLORS.text,
+  },
+  pickerItemMeta: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  unloadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    marginBottom: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 8,
+  },
+  unloadButtonText: {
+    fontSize: 14,
+    color: COLORS.error,
+  },
+  emptyPicker: {
+    alignItems: 'center',
+    padding: 24,
+    gap: 12,
+  },
+  emptyPickerText: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+  },
+  browseMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    gap: 8,
+  },
+  browseMoreText: {
+    fontSize: 14,
+    color: COLORS.textMuted,
   },
 });
