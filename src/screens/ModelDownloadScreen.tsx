@@ -13,7 +13,7 @@ import { Button, Card, ModelCard } from '../components';
 import { COLORS, RECOMMENDED_MODELS } from '../constants';
 import { useAppStore } from '../stores';
 import { hardwareService, huggingFaceService, modelManager } from '../services';
-import { ModelFile } from '../types';
+import { ModelFile, DownloadedModel } from '../types';
 import { RootStackParamList } from '../navigation/types';
 
 type ModelDownloadScreenProps = {
@@ -107,39 +107,41 @@ export const ModelDownloadScreen: React.FC<ModelDownloadScreenProps> = ({
     setSelectedFile(file);
     const downloadKey = `${modelId}/${file.name}`;
 
-    try {
-      await modelManager.downloadModel(
-        modelId,
-        file,
-        (progress) => {
-          setDownloadProgress(downloadKey, {
-            progress: progress.progress,
-            bytesDownloaded: progress.bytesDownloaded,
-            totalBytes: progress.totalBytes,
-          });
-        },
-        (model) => {
-          setDownloadProgress(downloadKey, null);
-          addDownloadedModel(model);
-          setActiveModelId(model.id);
+    const onProgress = (progress: {progress: number; bytesDownloaded: number; totalBytes: number}) => {
+      setDownloadProgress(downloadKey, {
+        progress: progress.progress,
+        bytesDownloaded: progress.bytesDownloaded,
+        totalBytes: progress.totalBytes,
+      });
+    };
+    const onComplete = (model: DownloadedModel) => {
+      setDownloadProgress(downloadKey, null);
+      addDownloadedModel(model);
+      setActiveModelId(model.id);
 
-          // Navigate to home/chat
-          Alert.alert(
-            'Download Complete!',
-            `${model.name} is ready to use. Let's start chatting!`,
-            [
-              {
-                text: 'Start Chatting',
-                onPress: () => navigation.replace('Main'),
-              },
-            ]
-          );
-        },
-        (error) => {
-          setDownloadProgress(downloadKey, null);
-          Alert.alert('Download Failed', error.message);
-        }
+      // Navigate to home/chat
+      Alert.alert(
+        'Download Complete!',
+        `${model.name} is ready to use. Let's start chatting!`,
+        [
+          {
+            text: 'Start Chatting',
+            onPress: () => navigation.replace('Main'),
+          },
+        ]
       );
+    };
+    const onError = (error: Error) => {
+      setDownloadProgress(downloadKey, null);
+      Alert.alert('Download Failed', error.message);
+    };
+
+    try {
+      if (modelManager.isBackgroundDownloadSupported()) {
+        await modelManager.downloadModelBackground(modelId, file, onProgress, onComplete, onError);
+      } else {
+        await modelManager.downloadModel(modelId, file, onProgress, onComplete, onError);
+      }
     } catch (error) {
       Alert.alert('Download Failed', (error as Error).message);
     }

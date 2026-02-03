@@ -26,6 +26,7 @@ interface ChatMessageProps {
   onGenerateImage?: (prompt: string) => void;
   showActions?: boolean;
   canGenerateImage?: boolean;
+  showGenerationDetails?: boolean;
 }
 
 // Parse message content to extract <think> blocks
@@ -126,6 +127,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   onGenerateImage,
   showActions = true,
   canGenerateImage = false,
+  showGenerationDetails = false,
 }) => {
   const [showActionMenu, setShowActionMenu] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -306,6 +308,75 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             </TouchableOpacity>
           )}
         </View>
+
+        {/* Generation details */}
+        {showGenerationDetails && message.generationMeta && message.role === 'assistant' && (
+          <View style={styles.generationMetaRow}>
+            <Text style={styles.generationMetaText}>
+              {message.generationMeta.gpuBackend || (message.generationMeta.gpu ? 'GPU' : 'CPU')}
+              {message.generationMeta.gpuLayers != null && message.generationMeta.gpuLayers > 0
+                ? ` (${message.generationMeta.gpuLayers}L)`
+                : ''}
+            </Text>
+            {message.generationMeta.modelName && (
+              <>
+                <Text style={styles.generationMetaSep}>·</Text>
+                <Text style={styles.generationMetaText} numberOfLines={1}>
+                  {message.generationMeta.modelName}
+                </Text>
+              </>
+            )}
+            {(message.generationMeta.decodeTokensPerSecond ?? message.generationMeta.tokensPerSecond) != null &&
+              (message.generationMeta.decodeTokensPerSecond ?? message.generationMeta.tokensPerSecond)! > 0 && (
+              <>
+                <Text style={styles.generationMetaSep}>·</Text>
+                <Text style={styles.generationMetaText}>
+                  {(message.generationMeta.decodeTokensPerSecond ?? message.generationMeta.tokensPerSecond)!.toFixed(1)} tok/s
+                </Text>
+              </>
+            )}
+            {message.generationMeta.timeToFirstToken != null && message.generationMeta.timeToFirstToken > 0 && (
+              <>
+                <Text style={styles.generationMetaSep}>·</Text>
+                <Text style={styles.generationMetaText}>
+                  TTFT {message.generationMeta.timeToFirstToken.toFixed(1)}s
+                </Text>
+              </>
+            )}
+            {message.generationMeta.tokenCount != null && message.generationMeta.tokenCount > 0 && (
+              <>
+                <Text style={styles.generationMetaSep}>·</Text>
+                <Text style={styles.generationMetaText}>
+                  {message.generationMeta.tokenCount} tokens
+                </Text>
+              </>
+            )}
+            {message.generationMeta.steps != null && (
+              <>
+                <Text style={styles.generationMetaSep}>·</Text>
+                <Text style={styles.generationMetaText}>
+                  {message.generationMeta.steps} steps
+                </Text>
+              </>
+            )}
+            {message.generationMeta.guidanceScale != null && (
+              <>
+                <Text style={styles.generationMetaSep}>·</Text>
+                <Text style={styles.generationMetaText}>
+                  cfg {message.generationMeta.guidanceScale}
+                </Text>
+              </>
+            )}
+            {message.generationMeta.resolution && (
+              <>
+                <Text style={styles.generationMetaSep}>·</Text>
+                <Text style={styles.generationMetaText}>
+                  {message.generationMeta.resolution}
+                </Text>
+              </>
+            )}
+          </View>
+        )}
       </TouchableOpacity>
 
       {/* Action Menu Modal */}
@@ -585,6 +656,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textMuted,
     letterSpacing: 1,
+  },
+  generationMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    marginTop: 2,
+    marginHorizontal: 8,
+    gap: 3,
+  },
+  generationMetaText: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    flexShrink: 1,
+  },
+  generationMetaSep: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    opacity: 0.5,
   },
   modalOverlay: {
     flex: 1,

@@ -3,10 +3,11 @@
  * This allows generation to continue even when the user navigates away from the chat screen
  */
 
+import { Platform } from 'react-native';
 import { llmService } from './llm';
 import { activeModelService } from './activeModelService';
-import { useChatStore } from '../stores';
-import { Message } from '../types';
+import { useAppStore, useChatStore } from '../stores';
+import { Message, GenerationMeta } from '../types';
 
 export interface GenerationState {
   isGenerating: boolean;
@@ -130,7 +131,24 @@ class GenerationService {
             const generationTime = this.state.startTime
               ? Date.now() - this.state.startTime
               : undefined;
-            chatStore.finalizeStreamingMessage(conversationId, generationTime);
+
+            // Build generation metadata
+            const gpuInfo = llmService.getGpuInfo();
+            const perfStats = llmService.getPerformanceStats();
+            const { downloadedModels, activeModelId } = useAppStore.getState();
+            const activeModel = downloadedModels.find(m => m.id === activeModelId);
+            const meta: GenerationMeta = {
+              gpu: gpuInfo.gpu,
+              gpuBackend: gpuInfo.gpuBackend,
+              gpuLayers: gpuInfo.gpuLayers,
+              modelName: activeModel?.name,
+              tokensPerSecond: perfStats.lastTokensPerSecond,
+              decodeTokensPerSecond: perfStats.lastDecodeTokensPerSecond,
+              timeToFirstToken: perfStats.lastTimeToFirstToken,
+              tokenCount: perfStats.lastTokenCount,
+            };
+
+            chatStore.finalizeStreamingMessage(conversationId, generationTime, meta);
           }
           this.resetState();
         },
@@ -177,7 +195,22 @@ class GenerationService {
     // If we have content and a conversation, save it
     const chatStore = useChatStore.getState();
     if (conversationId && streamingContent.trim()) {
-      chatStore.finalizeStreamingMessage(conversationId, generationTime);
+      // Build generation metadata
+      const gpuInfo = llmService.getGpuInfo();
+      const perfStats = llmService.getPerformanceStats();
+      const { downloadedModels, activeModelId } = useAppStore.getState();
+      const activeModel = downloadedModels.find(m => m.id === activeModelId);
+      const meta: GenerationMeta = {
+        gpu: gpuInfo.gpu,
+        gpuBackend: gpuInfo.gpuBackend,
+        gpuLayers: gpuInfo.gpuLayers,
+        modelName: activeModel?.name,
+        tokensPerSecond: perfStats.lastTokensPerSecond,
+        decodeTokensPerSecond: perfStats.lastDecodeTokensPerSecond,
+        timeToFirstToken: perfStats.lastTimeToFirstToken,
+        tokenCount: perfStats.lastTokenCount,
+      };
+      chatStore.finalizeStreamingMessage(conversationId, generationTime, meta);
     } else {
       chatStore.clearStreamingMessage();
     }

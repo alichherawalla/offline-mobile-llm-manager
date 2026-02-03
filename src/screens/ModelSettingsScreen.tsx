@@ -280,6 +280,44 @@ export const ModelSettingsScreen: React.FC = () => {
 
           <View style={styles.toggleRow}>
             <View style={styles.toggleInfo}>
+              <Text style={styles.toggleLabel}>GPU Acceleration</Text>
+              <Text style={styles.toggleDesc}>
+                Offload model layers to GPU. Requires model reload.
+              </Text>
+            </View>
+            <Switch
+              value={rawSettings?.enableGpu !== false}
+              onValueChange={(value) => updateSettings({ enableGpu: value })}
+              trackColor={{ false: COLORS.surfaceLight, true: COLORS.primary + '80' }}
+              thumbColor={rawSettings?.enableGpu !== false ? COLORS.primary : COLORS.textMuted}
+            />
+          </View>
+
+          {rawSettings?.enableGpu !== false && (
+            <View style={styles.sliderSection}>
+              <View style={styles.sliderHeader}>
+                <Text style={styles.sliderLabel}>GPU Layers</Text>
+                <Text style={styles.sliderValue}>{rawSettings?.gpuLayers ?? 6}</Text>
+              </View>
+              <Text style={styles.sliderDesc}>
+                Layers offloaded to GPU. Higher = faster but may crash on low-VRAM devices.
+              </Text>
+              <Slider
+                style={styles.slider}
+                minimumValue={1}
+                maximumValue={99}
+                step={1}
+                value={rawSettings?.gpuLayers ?? 6}
+                onSlidingComplete={(value) => updateSettings({ gpuLayers: value })}
+                minimumTrackTintColor={COLORS.primary}
+                maximumTrackTintColor={COLORS.surface}
+                thumbTintColor={COLORS.primary}
+              />
+            </View>
+          )}
+
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleInfo}>
               <Text style={styles.toggleLabel}>Model Loading Strategy</Text>
               <Text style={styles.toggleDesc}>
                 {rawSettings?.modelLoadingStrategy === 'performance'

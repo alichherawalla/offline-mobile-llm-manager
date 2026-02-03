@@ -53,6 +53,7 @@ A full-featured chat experience with real-time streaming responses. Watch the AI
 **Chat features include:**
 - Real-time token streaming
 - Expandable thought process view (for reasoning models)
+- **Generation metadata** — see GPU backend, model name, decode tok/s, time-to-first-token (TTFT), and token count for every response
 - Message actions: Copy, Edit, Resend
 - Voice input with on-device Whisper transcription
 - **Vision model support** with image attachments
@@ -237,6 +238,8 @@ Full control over inference parameters, just like LM Studio on desktop. Adjust t
 | Context Length | 512 - 8192 | Conversation memory window |
 | CPU Threads | 1 - 12 | Performance tuning |
 | Batch Size | 32 - 512 | Processing chunk size |
+| GPU Layers | 0 - 99 | Layers offloaded to GPU (0 = CPU only) |
+| Enable GPU | On/Off | Toggle GPU acceleration |
 
 ### Projects
 
@@ -337,7 +340,18 @@ npm run android
 
 ## How It Works
 
-LocalLLM uses [llama.cpp](https://github.com/ggerganov/llama.cpp) compiled for Android to run GGUF-quantized language models directly on your device's CPU. The app intelligently detects your device's capabilities and recommends appropriate models.
+LocalLLM uses [llama.cpp](https://github.com/ggerganov/llama.cpp) compiled for Android to run GGUF-quantized language models directly on your device's CPU and GPU. The app intelligently detects your device's capabilities and recommends appropriate models.
+
+### GPU Acceleration
+
+LocalLLM supports GPU offloading for text model inference on supported devices:
+
+- **iOS**: Metal GPU backend — full layer offloading enabled by default
+- **Android**: OpenCL GPU backend on Qualcomm Adreno GPUs — configurable GPU layers with automatic CPU fallback if GPU initialization fails
+
+Configure the number of GPU layers in Settings > Model Settings. Each layer offloaded to the GPU reduces CPU load but requires GPU-compatible memory. The app displays the active GPU backend (Metal, OpenCL, or CPU) alongside every generated response.
+
+> **Note:** Android GPU support via OpenCL is experimental. On some Qualcomm devices the OpenCL compute driver can be unstable for LLM workloads. If you experience crashes, reduce GPU layers or disable GPU entirely — the CPU inference path with ARM NEON/i8mm/dotprod SIMD optimizations delivers strong performance on modern Snapdragon chips.
 
 ### Architecture
 
@@ -352,8 +366,10 @@ LocalLLM uses [llama.cpp](https://github.com/ggerganov/llama.cpp) compiled for A
 ├──────────────────────────────────────────────────────────────────┤
 │                    Native Module Bridge                           │
 ├──────────────────────────────────────────────────────────────────┤
-│   llama.rn      whisper.rn      ONNX Runtime                     │
-│   (C++ JNI)     (C++ JNI)       (Kotlin Native)                  │
+│   llama.rn      whisper.rn      ONNX Runtime    Android DL Mgr   │
+│   (C++ JNI)     (C++ JNI)       (Kotlin)        (Kotlin)         │
+├──────────────────────────────────────────────────────────────────┤
+│             GPU: Metal (iOS) / OpenCL (Android)                    │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -491,9 +507,10 @@ See the [full build guide](#building-from-source) below for signing configuratio
 ## Technical Stack
 
 - **React Native** with TypeScript
-- **llama.rn** - Native GGUF model inference via llama.cpp
+- **llama.rn** - Native GGUF model inference via llama.cpp with GPU offloading (Metal/OpenCL)
 - **whisper.rn** - On-device speech recognition via whisper.cpp
 - **ONNX Runtime** - Stable Diffusion image generation
+- **Android DownloadManager** - Native background model downloads that survive app backgrounding
 - **Zustand** - State management with AsyncStorage persistence
 - **React Navigation** - Native navigation with nested stacks
 

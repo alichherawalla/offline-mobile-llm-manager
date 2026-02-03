@@ -23,6 +23,8 @@ const CONTEXT_SAFETY_MARGIN = 0.85; // Use only 85% of context to be safe
 // Default performance settings
 const DEFAULT_THREADS = Platform.OS === 'android' ? 6 : 4;
 const DEFAULT_BATCH = 256;
+// GPU layers: iOS Metal handles full offload well; Android OpenCL needs conservative setting
+const DEFAULT_GPU_LAYERS = Platform.OS === 'ios' ? 99 : 6;
 
 // Helper functions to get optimal settings based on platform
 function getOptimalThreadCount(): number {
@@ -45,6 +47,8 @@ export interface LLMPerformanceSettings {
 
 export interface LLMPerformanceStats {
   lastTokensPerSecond: number;
+  lastDecodeTokensPerSecond: number;
+  lastTimeToFirstToken: number;
   lastGenerationTime: number;
   lastTokenCount: number;
 }
@@ -57,6 +61,8 @@ class LLMService {
   private multimodalInitialized: boolean = false;
   private performanceStats: LLMPerformanceStats = {
     lastTokensPerSecond: 0,
+    lastDecodeTokensPerSecond: 0,
+    lastTimeToFirstToken: 0,
     lastGenerationTime: 0,
     lastTokenCount: 0,
   };
@@ -65,6 +71,11 @@ class LLMService {
     nBatch: DEFAULT_BATCH,
     contextLength: 2048,
   };
+  // Runtime GPU info from initLlama
+  private gpuEnabled: boolean = false;
+  private gpuReason: string = '';
+  private gpuDevices: string[] = [];
+  private activeGpuLayers: number = 0;
   // Session caching for faster repeated prompts
   private lastSystemPromptHash: string | null = null;
   private sessionCacheDir: string = `${RNFS.CachesDirectoryPath}/llm-sessions`;
@@ -125,28 +136,103 @@ class LLMService {
       const { settings } = useAppStore.getState();
       const nThreads = settings.nThreads || getOptimalThreadCount();
       const nBatch = settings.nBatch || getOptimalBatchSize();
-      // Use smaller context for vision models to save memory
-      const contextLength = Math.min(settings.contextLength || APP_CONFIG.maxContextLength, 2048);
+      const requestedContextLength = settings.contextLength || APP_CONFIG.maxContextLength;
+
+      // First do a lightweight load with minimal context to read model metadata
+      // Then reload with the appropriate context size
+      let contextLength = requestedContextLength;
 
       // Update internal settings tracker
       this.currentSettings = { nThreads, nBatch, contextLength };
 
-      // Determine GPU layers based on platform
-      const nGpuLayers = Platform.OS === 'ios' ? 99 : 0;
-
-      this.context = await initLlama({
+      const baseParams = {
         model: modelPath,
         use_mlock: false,
-        n_ctx: contextLength,
         n_batch: nBatch,
         n_threads: nThreads,
-        n_gpu_layers: nGpuLayers,
         use_mmap: true,
         vocab_only: false,
-        flash_attn: Platform.OS === 'ios',
-        cache_type_k: 'f16',
-        cache_type_v: 'f16',
-      } as any);
+        flash_attn: true,
+        cache_type_k: 'q8_0',
+        cache_type_v: 'q8_0',
+      };
+
+      console.log(`[LLM] Loading model: ctx=${contextLength}, threads=${nThreads}, batch=${nBatch}`);
+
+      // Load model with GPU if enabled, fall back to CPU if it fails
+      const gpuEnabled = settings.enableGpu !== false; // default true
+      const nGpuLayers = gpuEnabled ? (settings.gpuLayers ?? DEFAULT_GPU_LAYERS) : 0;
+      console.log(`[LLM] GPU setting: ${gpuEnabled ? 'enabled' : 'disabled'}, n_gpu_layers=${nGpuLayers}`);
+
+      let gpuAttemptFailed = false;
+      try {
+        this.context = await initLlama({
+          ...baseParams,
+          n_ctx: contextLength,
+          n_gpu_layers: nGpuLayers,
+        } as any);
+      } catch (gpuError: any) {
+        if (gpuEnabled) {
+          console.warn('[LLM] GPU load failed, falling back to CPU:', gpuError?.message || gpuError);
+          gpuAttemptFailed = true;
+        }
+        try {
+          this.context = await initLlama({
+            ...baseParams,
+            n_ctx: contextLength,
+            n_gpu_layers: 0,
+          } as any);
+        } catch (cpuError: any) {
+          // Context might be too large -- retry with safe default
+          console.warn(`[LLM] CPU load also failed (ctx=${contextLength}), retrying with ctx=2048:`, cpuError?.message || cpuError);
+          contextLength = 2048;
+          this.currentSettings.contextLength = contextLength;
+          this.context = await initLlama({
+            ...baseParams,
+            n_ctx: contextLength,
+            n_gpu_layers: 0,
+          } as any);
+        }
+      }
+
+      // Read the model's trained context length from metadata and log it
+      try {
+        const metadata = (this.context as any).model?.metadata;
+        if (metadata) {
+          const trainCtx = metadata['llama.context_length']
+            || metadata['general.context_length']
+            || metadata['context_length'];
+          if (trainCtx) {
+            const maxModelCtx = parseInt(trainCtx, 10);
+            console.log(`[LLM] Model trained context: ${maxModelCtx}, using: ${contextLength}`);
+            if (contextLength > maxModelCtx) {
+              console.warn(`[LLM] Requested context (${contextLength}) exceeds model max (${maxModelCtx})`);
+            }
+          }
+        }
+      } catch (e) {
+        // Metadata reading is best-effort
+      }
+
+      // Capture runtime GPU status from the context
+      const nativeGpuAvailable = this.context.gpu ?? false;
+      this.gpuReason = (this.context as any).reasonNoGPU ?? '';
+      this.gpuDevices = (this.context as any).devices ?? [];
+      // GPU is only truly enabled if layers were requested AND native reports available
+      this.activeGpuLayers = gpuAttemptFailed ? 0 : nGpuLayers;
+      this.gpuEnabled = nativeGpuAvailable && this.activeGpuLayers > 0;
+
+      // Log which native lib was loaded and GPU status
+      const androidLib = (this.context as any).androidLib || 'unknown';
+      const systemInfo = (this.context as any).systemInfo || '';
+      console.log(`[LLM] Native lib: ${androidLib}`);
+      console.log(`[LLM] System info: ${systemInfo}`);
+
+      if (this.gpuEnabled) {
+        console.log(`[LLM] GPU active: ${this.gpuDevices.join(', ') || 'yes'}, layers=${this.activeGpuLayers}`);
+      } else {
+        console.log(`[LLM] Running on CPU only${nativeGpuAvailable ? ' (GPU available but not used)' : ''}${this.gpuReason ? ': ' + this.gpuReason : ''}`);
+      }
 
       this.currentModelPath = modelPath;
       this.multimodalSupport = null;
@@ -166,6 +252,10 @@ class LLMService {
       this.context = null;
       this.currentModelPath = null;
       this.multimodalSupport = null;
+      this.gpuEnabled = false;
+      this.gpuReason = '';
+      this.activeGpuLayers = 0;
+      this.gpuDevices = [];
       throw new Error(error?.message || 'Unknown error loading model');
     }
   }
@@ -244,6 +334,10 @@ class LLMService {
       this.currentModelPath = null;
       this.multimodalSupport = null;
       this.multimodalInitialized = false;
+      this.gpuEnabled = false;
+      this.gpuReason = '';
+      this.gpuDevices = [];
+      this.activeGpuLayers = 0;
     }
   }
 
@@ -359,10 +453,15 @@ class LLMService {
       // Log and store performance stats
       const elapsed = (Date.now() - startTime) / 1000;
       const tokensPerSec = elapsed > 0 ? tokenCount / elapsed : 0;
-      console.log(`[LLM] Generated ${tokenCount} tokens in ${elapsed.toFixed(1)}s (${tokensPerSec.toFixed(1)} tok/s)`);
+      const ttft = firstTokenTime / 1000; // convert ms to seconds
+      const decodeTime = elapsed - ttft;
+      const decodeTokensPerSec = decodeTime > 0 && tokenCount > 1 ? (tokenCount - 1) / decodeTime : 0;
+      console.log(`[LLM] Generated ${tokenCount} tokens in ${elapsed.toFixed(1)}s (${tokensPerSec.toFixed(1)} tok/s overall, ${decodeTokensPerSec.toFixed(1)} tok/s decode, TTFT ${ttft.toFixed(2)}s)`);
 
       this.performanceStats = {
         lastTokensPerSecond: tokensPerSec,
+        lastDecodeTokensPerSecond: decodeTokensPerSec,
+        lastTimeToFirstToken: ttft,
         lastGenerationTime: elapsed,
         lastTokenCount: tokenCount,
       };
@@ -515,6 +614,25 @@ class LLMService {
     return {
       contextMemoryMB,
       totalEstimatedMB: contextMemoryMB, // Model memory is separate and tracked via file size
+    };
+  }
+
+  getGpuInfo(): { gpu: boolean; gpuBackend: string; gpuLayers: number; reasonNoGPU: string } {
+    let backend = 'CPU';
+    if (this.gpuEnabled) {
+      if (Platform.OS === 'ios') {
+        backend = 'Metal';
+      } else if (this.gpuDevices.length > 0) {
+        backend = this.gpuDevices.join(', ');
+      } else {
+        backend = 'OpenCL';
+      }
+    }
+    return {
+      gpu: this.gpuEnabled,
+      gpuBackend: backend,
+      gpuLayers: this.activeGpuLayers,
+      reasonNoGPU: this.gpuReason,
     };
   }
 
@@ -749,16 +867,47 @@ class LLMService {
     try {
       console.log(`[LLM] Reloading with threads=${settings.nThreads}, batch=${settings.nBatch}, ctx=${settings.contextLength}`);
 
-      this.context = await initLlama({
+      const { settings: appSettings } = useAppStore.getState();
+      const gpuEnabled = appSettings.enableGpu !== false;
+      const nGpuLayers = gpuEnabled ? (appSettings.gpuLayers ?? DEFAULT_GPU_LAYERS) : 0;
+
+      const reloadParams = {
         model: modelPath,
         use_mlock: false,
         n_ctx: settings.contextLength,
         n_batch: settings.nBatch,
         n_threads: settings.nThreads,
-        n_gpu_layers: Platform.OS === 'ios' ? 99 : 0,
         use_mmap: true,
         vocab_only: false,
-      });
+        flash_attn: true,
+        cache_type_k: 'q8_0',
+        cache_type_v: 'q8_0',
+      };
+
+      // Try with GPU setting, fall back to CPU if it fails
+      let gpuAttemptFailed = false;
+      try {
+        this.context = await initLlama({
+          ...reloadParams,
+          n_gpu_layers: nGpuLayers,
+        } as any);
+      } catch (gpuError: any) {
+        if (gpuEnabled) {
+          console.warn('[LLM] GPU reload failed, falling back to CPU:', gpuError?.message);
+          gpuAttemptFailed = true;
+        }
+        this.context = await initLlama({
+          ...reloadParams,
+          n_gpu_layers: 0,
+        } as any);
+      }
+
+      // Capture runtime GPU status
+      const nativeGpuAvailable = this.context.gpu ?? false;
+      this.gpuReason = (this.context as any).reasonNoGPU ?? '';
+      this.gpuDevices = (this.context as any).devices ?? [];
+      this.activeGpuLayers = gpuAttemptFailed ? 0 : nGpuLayers;
+      this.gpuEnabled = nativeGpuAvailable && this.activeGpuLayers > 0;
 
       this.currentModelPath = modelPath;
       this.multimodalSupport = null;
@@ -766,7 +915,7 @@ class LLMService {
 
       await this.checkMultimodalSupport();
 
-      console.log('[LLM] Model reloaded with new settings');
+      console.log(`[LLM] Model reloaded, GPU: ${this.gpuEnabled ? `active (${this.activeGpuLayers}L)` : 'off'}`);
     } catch (error) {
       console.error('[LLM] Error reloading model:', error);
       this.context = null;

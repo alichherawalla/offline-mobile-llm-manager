@@ -252,10 +252,15 @@ class DownloadManagerModule(reactContext: ReactApplicationContext) :
                 putString("status", status)
             }
 
+            val previousStatus = download.optString("status", "pending")
+
             when (status) {
                 "completed" -> {
                     eventParams.putString("localUri", statusInfo.getString("localUri"))
-                    sendEvent("DownloadComplete", eventParams)
+                    // Only emit DownloadComplete once — skip if already marked completed
+                    if (previousStatus != "completed") {
+                        sendEvent("DownloadComplete", eventParams)
+                    }
                     updateDownloadStatus(downloadId, "completed", statusInfo.getString("localUri"))
                 }
                 "failed" -> {

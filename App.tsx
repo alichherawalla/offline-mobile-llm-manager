@@ -65,6 +65,27 @@ function App() {
 
       // Initialize model manager and load downloaded models list
       await modelManager.initialize();
+
+      // Wire up background download metadata persistence
+      const { setBackgroundDownload, activeBackgroundDownloads, addDownloadedModel } = useAppStore.getState();
+      modelManager.setBackgroundDownloadMetadataCallback((downloadId, info) => {
+        setBackgroundDownload(downloadId, info);
+      });
+
+      // Recover any background downloads that completed while app was dead
+      try {
+        const recoveredModels = await modelManager.syncBackgroundDownloads(
+          activeBackgroundDownloads,
+          (downloadId) => setBackgroundDownload(downloadId, null)
+        );
+        for (const model of recoveredModels) {
+          addDownloadedModel(model);
+          console.log('[App] Recovered background download:', model.name);
+        }
+      } catch (err) {
+        console.error('[App] Failed to sync background downloads:', err);
+      }
+
       const downloadedModels = await modelManager.getDownloadedModels();
       setDownloadedModels(downloadedModels);
 

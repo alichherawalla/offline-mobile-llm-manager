@@ -92,6 +92,32 @@ export interface MediaAttachment {
   fileName?: string;
 }
 
+// Generation metadata - details about how a message was generated
+export interface GenerationMeta {
+  /** Whether GPU was used for inference */
+  gpu: boolean;
+  /** GPU backend name (e.g., 'Metal', 'CPU') */
+  gpuBackend?: string;
+  /** Number of GPU layers offloaded */
+  gpuLayers?: number;
+  /** Model name used for generation */
+  modelName?: string;
+  /** Tokens per second — overall including prefill (text generation only) */
+  tokensPerSecond?: number;
+  /** Tokens per second — decode only, excluding prefill (text generation only) */
+  decodeTokensPerSecond?: number;
+  /** Time to first token in seconds (text generation only) */
+  timeToFirstToken?: number;
+  /** Token count (text generation only) */
+  tokenCount?: number;
+  /** Image generation steps */
+  steps?: number;
+  /** Image guidance scale */
+  guidanceScale?: number;
+  /** Image resolution */
+  resolution?: string;
+}
+
 // Chat-related types
 export interface Message {
   id: string;
@@ -103,6 +129,8 @@ export interface Message {
   attachments?: MediaAttachment[];
   /** Generation duration in milliseconds */
   generationTimeMs?: number;
+  /** Metadata about how the message was generated */
+  generationMeta?: GenerationMeta;
 }
 
 export interface Conversation {

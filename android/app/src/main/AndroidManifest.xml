@@ -28,6 +28,10 @@
       android:supportsRtl="true"
       android:largeHeap="true"
       android:hardwareAccelerated="true">
+
+      <!-- GPU-accelerated LLM inference on Qualcomm SoCs -->
+      <uses-native-library android:name="libOpenCL.so" android:required="false" />
+      <uses-native-library android:name="libcdsprpc.so" android:required="false" />
       <activity
         android:name=".MainActivity"
         android:label="@string/app_name"

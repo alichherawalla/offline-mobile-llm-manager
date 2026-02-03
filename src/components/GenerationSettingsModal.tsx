@@ -26,7 +26,7 @@ interface SettingConfig {
 
 const DEFAULT_SETTINGS = {
   temperature: 0.7,
-  maxTokens: 512,
+  maxTokens: 1024,
   topP: 0.9,
   repeatPenalty: 1.1,
   contextLength: 2048,
@@ -521,6 +521,74 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
               <Text style={styles.sectionTitle}>Performance</Text>
             </View>
 
+            {/* GPU Acceleration Toggle */}
+            <View style={styles.modeToggleContainer}>
+              <View style={styles.modeToggleInfo}>
+                <Text style={styles.modeToggleLabel}>GPU Acceleration</Text>
+                <Text style={styles.modeToggleDesc}>
+                  Offload inference to GPU when available. Faster for large models, may add overhead for small ones. Requires model reload.
+                </Text>
+              </View>
+              <View style={styles.modeToggleButtons}>
+                <TouchableOpacity
+                  style={[
+                    styles.modeButton,
+                    !settings.enableGpu && styles.modeButtonActive,
+                  ]}
+                  onPress={() => updateSettings({ enableGpu: false })}
+                >
+                  <Text
+                    style={[
+                      styles.modeButtonText,
+                      !settings.enableGpu && styles.modeButtonTextActive,
+                    ]}
+                  >
+                    Off
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.modeButton,
+                    settings.enableGpu && styles.modeButtonActive,
+                  ]}
+                  onPress={() => updateSettings({ enableGpu: true })}
+                >
+                  <Text
+                    style={[
+                      styles.modeButtonText,
+                      settings.enableGpu && styles.modeButtonTextActive,
+                    ]}
+                  >
+                    On
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* GPU Layers Slider - only shown when GPU is enabled */}
+            {settings.enableGpu && (
+              <View style={styles.settingItem}>
+                <View style={styles.settingHeader}>
+                  <Text style={styles.settingLabel}>GPU Layers</Text>
+                  <Text style={styles.settingValue}>{settings.gpuLayers ?? 6}</Text>
+                </View>
+                <Text style={styles.settingDescription}>
+                  Layers offloaded to GPU. Higher = faster but may crash on low-VRAM devices. Requires model reload.
+                </Text>
+                <Slider
+                  style={styles.slider}
+                  minimumValue={1}
+                  maximumValue={99}
+                  step={1}
+                  value={settings.gpuLayers ?? 6}
+                  onSlidingComplete={(value: number) => updateSettings({ gpuLayers: value })}
+                  minimumTrackTintColor={COLORS.primary}
+                  maximumTrackTintColor={COLORS.surface}
+                  thumbTintColor={COLORS.primary}
+                />
+              </View>
+            )}
+
             <View style={styles.modeToggleContainer}>
               <View style={styles.modeToggleInfo}>
                 <Text style={styles.modeToggleLabel}>Model Loading Strategy</Text>
@@ -561,6 +629,50 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
                     ]}
                   >
                     Fast
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Show Generation Details Toggle */}
+            <View style={styles.modeToggleContainer}>
+              <View style={styles.modeToggleInfo}>
+                <Text style={styles.modeToggleLabel}>Show Generation Details</Text>
+                <Text style={styles.modeToggleDesc}>
+                  Display GPU, model, tok/s, and image settings below each message
+                </Text>
+              </View>
+              <View style={styles.modeToggleButtons}>
+                <TouchableOpacity
+                  style={[
+                    styles.modeButton,
+                    !settings.showGenerationDetails && styles.modeButtonActive,
+                  ]}
+                  onPress={() => updateSettings({ showGenerationDetails: false })}
+                >
+                  <Text
+                    style={[
+                      styles.modeButtonText,
+                      !settings.showGenerationDetails && styles.modeButtonTextActive,
+                    ]}
+                  >
+                    Off
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.modeButton,
+                    settings.showGenerationDetails && styles.modeButtonActive,
+                  ]}
+                  onPress={() => updateSettings({ showGenerationDetails: true })}
+                >
+                  <Text
+                    style={[
+                      styles.modeButtonText,
+                      settings.showGenerationDetails && styles.modeButtonTextActive,
+                    ]}
+                  >
+                    On
                   </Text>
                 </TouchableOpacity>
               </View>

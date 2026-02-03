@@ -76,6 +76,12 @@ interface AppState {
     imageGuidanceScale: number;
     // Model loading strategy: 'performance' keeps models loaded, 'memory' loads on demand
     modelLoadingStrategy: ModelLoadingStrategy;
+    // GPU acceleration for text model inference (requires model reload)
+    enableGpu: boolean;
+    // Number of model layers offloaded to GPU (higher = more GPU usage, 0 = CPU only)
+    gpuLayers: number;
+    // Show generation details (GPU, model, tok/s, steps, etc.) in chat messages
+    showGenerationDetails: boolean;
   };
   updateSettings: (settings: Partial<AppState['settings']>) => void;
 
@@ -171,7 +177,7 @@ export const useAppStore = create<AppState>()(
       settings: {
         systemPrompt: 'You are a helpful AI assistant running locally on the user\'s device. Be concise and helpful.',
         temperature: 0.7,
-        maxTokens: 512,
+        maxTokens: 1024,
         topP: 0.9,
         repeatPenalty: 1.1,
         contextLength: 2048,
@@ -192,6 +198,12 @@ export const useAppStore = create<AppState>()(
         imageGuidanceScale: 2.0,
         // Model loading strategy: 'performance' = keep loaded, 'memory' = load on demand
         modelLoadingStrategy: 'memory' as ModelLoadingStrategy,
+        // GPU acceleration for text inference (try GPU offloading when available)
+        enableGpu: true,
+        // Number of model layers to offload to GPU (iOS Metal can handle more; Android OpenCL needs conservative values)
+        gpuLayers: 6,
+        // Show generation details in chat messages (GPU, model, tok/s, etc.)
+        showGenerationDetails: false,
       },
       updateSettings: (newSettings) =>
         set((state) => ({

@@ -30,7 +30,7 @@ import {
 import { COLORS, APP_CONFIG } from '../constants';
 import { useAppStore, useChatStore, useProjectStore } from '../stores';
 import { llmService, modelManager, onnxImageGeneratorService, intentClassifier, activeModelService, generationService } from '../services';
-import { Message, MediaAttachment, Project, DownloadedModel, ImageModeState } from '../types';
+import { Message, MediaAttachment, Project, DownloadedModel, ImageModeState, GenerationMeta } from '../types';
 import { ChatsStackParamList } from '../navigation/types';
 
 type ChatScreenRouteProp = RouteProp<ChatsStackParamList, 'Chat'>;
@@ -445,6 +445,17 @@ export const ChatScreen: React.FC = () => {
       if (result && result.imagePath) {
         console.log('[ChatScreen] Image generated, adding to chat:', result.imagePath);
         setImageGenerationStatus('Saving image...');
+
+        // Build image generation metadata
+        const imageMeta: GenerationMeta = {
+          gpu: Platform.OS === 'ios',
+          gpuBackend: Platform.OS === 'ios' ? 'Metal' : 'CPU',
+          modelName: activeImageModel.name,
+          steps: settings.imageSteps || 30,
+          guidanceScale: settings.imageGuidanceScale || 7.5,
+          resolution: `${result.width}x${result.height}`,
+        };
+
         addMessage(
           conversationId,
           {
@@ -458,7 +469,8 @@ export const ChatScreen: React.FC = () => {
             width: result.width,
             height: result.height,
           }],
-          imageGenTime
+          imageGenTime,
+          imageMeta
         );
       }
     } catch (error: any) {
@@ -810,6 +822,7 @@ export const ChatScreen: React.FC = () => {
       onGenerateImage={handleGenerateImageFromMessage}
       onImagePress={handleImagePress}
       canGenerateImage={imageModelLoaded && !isStreaming && !isGeneratingImage}
+      showGenerationDetails={settings.showGenerationDetails}
     />
   );
 

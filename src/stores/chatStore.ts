@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Message, Conversation, MediaAttachment } from '../types';
+import { Message, Conversation, MediaAttachment, GenerationMeta } from '../types';
 
 interface ChatState {
   // Conversations
@@ -22,7 +22,7 @@ interface ChatState {
   setConversationProject: (conversationId: string, projectId: string | null) => void;
 
   // Messages
-  addMessage: (conversationId: string, message: Omit<Message, 'id' | 'timestamp'>, attachments?: MediaAttachment[], generationTimeMs?: number) => Message;
+  addMessage: (conversationId: string, message: Omit<Message, 'id' | 'timestamp'>, attachments?: MediaAttachment[], generationTimeMs?: number, generationMeta?: GenerationMeta) => Message;
   updateMessage: (conversationId: string, messageId: string, content: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
   deleteMessagesAfter: (conversationId: string, messageId: string) => void;
@@ -33,7 +33,7 @@ interface ChatState {
   appendToStreamingMessage: (token: string) => void;
   setIsStreaming: (streaming: boolean) => void;
   setIsThinking: (thinking: boolean) => void;
-  finalizeStreamingMessage: (conversationId: string, generationTimeMs?: number) => void;
+  finalizeStreamingMessage: (conversationId: string, generationTimeMs?: number, generationMeta?: GenerationMeta) => void;
   clearStreamingMessage: () => void;
   getStreamingState: () => { conversationId: string | null; content: string; isStreaming: boolean; isThinking: boolean };
 
@@ -109,13 +109,14 @@ export const useChatStore = create<ChatState>()(
         }));
       },
 
-      addMessage: (conversationId, messageData, attachments, generationTimeMs) => {
+      addMessage: (conversationId, messageData, attachments, generationTimeMs, generationMeta) => {
         const message: Message = {
           id: generateId(),
           ...messageData,
           timestamp: Date.now(),
           attachments: attachments,
           generationTimeMs: generationTimeMs,
+          generationMeta: generationMeta,
         };
 
         set((state) => ({
@@ -211,14 +212,14 @@ export const useChatStore = create<ChatState>()(
         set({ isThinking: thinking });
       },
 
-      finalizeStreamingMessage: (conversationId, generationTimeMs) => {
+      finalizeStreamingMessage: (conversationId, generationTimeMs, generationMeta) => {
         const { streamingMessage, streamingForConversationId, addMessage } = get();
         // Only finalize if this is the conversation we were generating for
         if (streamingForConversationId === conversationId && streamingMessage.trim()) {
           addMessage(conversationId, {
             role: 'assistant',
             content: streamingMessage.trim(),
-          }, undefined, generationTimeMs);
+          }, undefined, generationTimeMs, generationMeta);
         }
         set({
           streamingMessage: '',

@@ -567,27 +567,29 @@ export const ModelsScreen: React.FC = () => {
   const handleDownload = async (model: ModelInfo, file: ModelFile) => {
     const downloadKey = `${model.id}/${file.name}`;
 
+    const onProgress = (progress: {progress: number; bytesDownloaded: number; totalBytes: number}) => {
+      setDownloadProgress(downloadKey, {
+        progress: progress.progress,
+        bytesDownloaded: progress.bytesDownloaded,
+        totalBytes: progress.totalBytes,
+      });
+    };
+    const onComplete = (downloadedModel: DownloadedModel) => {
+      setDownloadProgress(downloadKey, null);
+      addDownloadedModel(downloadedModel);
+      Alert.alert('Success', `${model.name} downloaded successfully!`);
+    };
+    const onError = (error: Error) => {
+      setDownloadProgress(downloadKey, null);
+      Alert.alert('Download Failed', error.message);
+    };
+
     try {
-      await modelManager.downloadModel(
-        model.id,
-        file,
-        (progress) => {
-          setDownloadProgress(downloadKey, {
-            progress: progress.progress,
-            bytesDownloaded: progress.bytesDownloaded,
-            totalBytes: progress.totalBytes,
-          });
-        },
-        (downloadedModel) => {
-          setDownloadProgress(downloadKey, null);
-          addDownloadedModel(downloadedModel);
-          Alert.alert('Success', `${model.name} downloaded successfully!`);
-        },
-        (error) => {
-          setDownloadProgress(downloadKey, null);
-          Alert.alert('Download Failed', error.message);
-        }
-      );
+      if (modelManager.isBackgroundDownloadSupported()) {
+        await modelManager.downloadModelBackground(model.id, file, onProgress, onComplete, onError);
+      } else {
+        await modelManager.downloadModel(model.id, file, onProgress, onComplete, onError);
+      }
     } catch (error) {
       Alert.alert('Download Failed', (error as Error).message);
     }
