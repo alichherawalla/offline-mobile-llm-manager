@@ -5,7 +5,7 @@
  */
 
 import { llmService } from './llm';
-import { onnxImageGeneratorService } from './onnxImageGenerator';
+import { localDreamGeneratorService as onnxImageGeneratorService } from './localDreamGenerator';
 import { modelManager } from './modelManager';
 import { hardwareService } from './hardware';
 import { useAppStore } from '../stores';

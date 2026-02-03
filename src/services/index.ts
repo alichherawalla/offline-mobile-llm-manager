@@ -2,7 +2,7 @@ export { hardwareService } from './hardware';
 export { huggingFaceService } from './huggingface';
 export { modelManager } from './modelManager';
 export { llmService } from './llm';
-export { onnxImageGeneratorService } from './onnxImageGenerator';
+export { localDreamGeneratorService as onnxImageGeneratorService } from './localDreamGenerator';
 export { intentClassifier } from './intentClassifier';
 export type { Intent } from './intentClassifier';
 export { voiceService } from './voiceService';

@@ -5,7 +5,7 @@
  */
 
 import { Platform } from 'react-native';
-import { onnxImageGeneratorService } from './onnxImageGenerator';
+import { localDreamGeneratorService as onnxImageGeneratorService } from './localDreamGenerator';
 import { activeModelService } from './activeModelService';
 import { useAppStore, useChatStore } from '../stores';
 import { GeneratedImage, GenerationMeta } from '../types';
@@ -179,19 +179,23 @@ class ImageGenerationService {
           previewInterval: params.previewInterval ?? 2,
         },
         // onProgress - service-owned callback, never goes stale
+        // The server reports total_steps = requested_steps + 2 (CLIP + VAE overhead),
+        // so we use the requested `steps` value for display consistency.
         (progress) => {
           if (this.cancelRequested) return;
+          const displayStep = Math.min(progress.step, steps);
           this.updateState({
-            progress: { step: progress.step, totalSteps: progress.totalSteps },
-            status: `Generating image (${progress.step}/${progress.totalSteps})...`,
+            progress: { step: displayStep, totalSteps: steps },
+            status: `Generating image (${displayStep}/${steps})...`,
           });
         },
         // onPreview - service-owned callback
         (preview) => {
           if (this.cancelRequested) return;
+          const displayStep = Math.min(preview.step, steps);
           this.updateState({
             previewPath: `file://${preview.previewPath}?t=${Date.now()}`,
-            status: `Refining image (${preview.step}/${preview.totalSteps})...`,
+            status: `Refining image (${displayStep}/${steps})...`,
           });
         },
       );
