@@ -3,9 +3,9 @@
 **The truly offline-first LLM manager for mobile. Your AI, your device, your data.**
 
 <p align="center">
-  <img src="screenshots/Screenshot_2026-01-30-12-29-09-94_f28200242d1465b50ec18721116dc637.jpg" width="250" alt="Home Screen">
-  <img src="screenshots/Screenshot_2026-01-30-12-29-44-44_f28200242d1465b50ec18721116dc637.jpg" width="250" alt="Chat Interface">
-  <img src="screenshots/Screenshot_2026-01-30-12-31-04-59_f28200242d1465b50ec18721116dc637.jpg" width="250" alt="Browse Models">
+  <img src="screenshots/chat-thinking-detail.jpg" width="250" alt="Chat with Thinking">
+  <img src="screenshots/image-generation-complete.jpg" width="250" alt="Image Generation">
+  <img src="screenshots/browse-models-text.jpg" width="250" alt="Browse Models">
 </p>
 
 LocalLLM is a React Native application that brings the power of large language models and image generation directly to your mobile device. Unlike cloud-based AI assistants that send every conversation to remote servers, LocalLLM runs **entirely on-device**—no internet required, no data leaves your phone, complete privacy guaranteed.
@@ -38,7 +38,6 @@ The home screen gives you a complete overview at a glance: your currently active
 
 <p align="center">
   <img src="screenshots/Screenshot_2026-01-30-12-29-09-94_f28200242d1465b50ec18721116dc637.jpg" width="300" alt="Home Dashboard">
-  <img src="screenshots/Screenshot_2026-01-30-12-29-34-82_f28200242d1465b50ec18721116dc637.jpg" width="300" alt="Home with Active Model">
 </p>
 
 ### Intelligent Chat Interface
@@ -46,14 +45,21 @@ The home screen gives you a complete overview at a glance: your currently active
 A full-featured chat experience with real-time streaming responses. Watch the AI think before it responds with the expandable thought process view—perfect for reasoning models like Qwen3.
 
 <p align="center">
-  <img src="screenshots/Screenshot_2026-01-30-12-29-44-44_f28200242d1465b50ec18721116dc637.jpg" width="300" alt="Chat with Thinking">
-  <img src="screenshots/Screenshot_2026-01-30-12-30-49-82_f28200242d1465b50ec18721116dc637.jpg" width="300" alt="Chat Interface">
+  <img src="screenshots/chat-thinking-expanded.jpg" width="300" alt="Chat with Thinking Expanded">
+  <img src="screenshots/chat-gpu-metadata.jpg" width="300" alt="Chat with GPU Metadata">
+</p>
+
+Every response shows detailed generation metadata: GPU backend (OpenCL or CPU), model name, decode tok/s, time-to-first-token (TTFT), and total token count.
+
+<p align="center">
+  <img src="screenshots/chat-cpu-metadata.jpg" width="300" alt="Chat with CPU Metadata">
+  <img src="screenshots/chat-thinking-detail.jpg" width="300" alt="Thought Process Detail">
 </p>
 
 **Chat features include:**
 - Real-time token streaming
 - Expandable thought process view (for reasoning models)
-- **Generation metadata** — see GPU backend, model name, decode tok/s, time-to-first-token (TTFT), and token count for every response
+- **Generation metadata** — GPU backend, model name, decode tok/s, TTFT, and token count for every response
 - Message actions: Copy, Edit, Resend
 - Voice input with on-device Whisper transcription
 - **Vision model support** with image attachments
@@ -136,12 +142,24 @@ LocalLLM supports both **Standard Diffusion** and **LCM (Latent Consistency Mode
 
 **LCM Advantage:** Generate images in just 4-8 steps instead of 20-50, with minimal quality loss. Perfect for quick previews and iterations.
 
+### Image Generation in Action
+
+<p align="center">
+  <img src="screenshots/image-generation-starting.jpg" width="250" alt="Image Generation Starting">
+  <img src="screenshots/image-generation-refining.jpg" width="250" alt="Image Refining">
+  <img src="screenshots/image-generation-complete.jpg" width="250" alt="Completed Image">
+</p>
+
+<p align="center">
+  <img src="screenshots/fullscreen-image-viewer.jpg" width="300" alt="Fullscreen Image Viewer">
+</p>
+
 ### Image Generation Features
 
 - **Real-time Preview**: See your image emerge during generation (every 2 steps)
 - **Automatic Intent Detection**: AI classifies if your message wants an image or text response
 - **Manual Override**: Force image generation with the toggle button
-- **Fullscreen Viewer**: Tap any generated image to view in fullscreen
+- **Fullscreen Viewer**: Tap any generated image to view in fullscreen with Save option
 - **Save to Gallery**: Save generated images to your Pictures folder
 - **Generation Timing**: See how long each image took to generate
 - **Customizable Settings**:
@@ -215,18 +233,21 @@ Just like text generation, **all image generation happens 100% on-device**:
 
 ### Switch Models Instantly
 
-Tap the model name in the header to switch between downloaded models without leaving your conversation. Load, unload, or switch with a single tap.
+Tap the model name in the header to switch between downloaded models without leaving your conversation. Separate tabs for Text and Image models let you load, unload, or switch with a single tap.
 
 <p align="center">
-  <img src="screenshots/Screenshot_2026-01-30-12-29-49-11_f28200242d1465b50ec18721116dc637.jpg" width="300" alt="Model Selector">
+  <img src="screenshots/model-selector-text.jpg" width="300" alt="Model Selector - Text">
+  <img src="screenshots/model-selector-image.jpg" width="300" alt="Model Selector - Image">
 </p>
 
 ### Fine-Tune Every Parameter
 
-Full control over inference parameters, just like LM Studio on desktop. Adjust temperature, tokens, sampling, and performance settings to get exactly the responses you want.
+Full control over inference parameters for both text and image generation. Adjust temperature, tokens, sampling, GPU offloading, and image generation settings to get exactly the results you want.
 
 <p align="center">
-  <img src="screenshots/Screenshot_2026-01-30-12-29-52-89_f28200242d1465b50ec18721116dc637.jpg" width="300" alt="Generation Settings">
+  <img src="screenshots/generation-settings-image.jpg" width="250" alt="Image Generation Settings">
+  <img src="screenshots/generation-settings-text.jpg" width="250" alt="Text Generation Settings">
+  <img src="screenshots/generation-settings-gpu.jpg" width="250" alt="GPU Settings">
 </p>
 
 | Setting | Range | Description |
@@ -246,9 +267,7 @@ Full control over inference parameters, just like LM Studio on desktop. Adjust t
 Create custom AI contexts with unique system prompts. Perfect for different use cases—code review, creative writing, language learning, or anything you imagine.
 
 <p align="center">
-  <img src="screenshots/Screenshot_2026-01-30-12-30-08-22_f28200242d1465b50ec18721116dc637.jpg" width="250" alt="Projects List">
-  <img src="screenshots/Screenshot_2026-01-30-12-30-16-06_f28200242d1465b50ec18721116dc637.jpg" width="250" alt="Project Edit">
-  <img src="screenshots/Screenshot_2026-01-30-12-30-18-77_f28200242d1465b50ec18721116dc637.jpg" width="250" alt="Project Detail">
+  <img src="screenshots/projects-list.jpg" width="300" alt="Projects List">
 </p>
 
 Each project has its own:
@@ -257,25 +276,22 @@ Each project has its own:
 - Dedicated conversation history
 - Quick-switch from chat header
 
-<p align="center">
-  <img src="screenshots/Screenshot_2026-01-30-12-29-59-91_f28200242d1465b50ec18721116dc637.jpg" width="300" alt="Project Selector in Chat">
-  <img src="screenshots/Screenshot_2026-01-30-12-30-57-70_f28200242d1465b50ec18721116dc637.jpg" width="300" alt="Project Conversations">
-</p>
-
-### Conversation Management
-
-All your chats organized with project badges, timestamps, and previews. Quickly find any conversation or start fresh.
-
-<p align="center">
-  <img src="screenshots/Screenshot_2026-01-30-12-30-54-66_f28200242d1465b50ec18721116dc637.jpg" width="300" alt="Chats List">
-</p>
-
 ### Browse & Download Models
 
-Search Hugging Face's vast model library directly from the app. Filter by type (Text, Vision, Code) and source (LM Studio, Official, Verified, Community). Compatibility is checked automatically before download.
+Search Hugging Face's vast model library directly from the app. Filter by type (Text, Vision, Code, Image Generation) and source (LM Studio, Official, Verified, Community). Separate tabs for Text and Image models. Compatibility is checked automatically before download.
 
 <p align="center">
-  <img src="screenshots/Screenshot_2026-01-30-12-31-04-59_f28200242d1465b50ec18721116dc637.jpg" width="300" alt="Browse Models">
+  <img src="screenshots/browse-models-text.jpg" width="300" alt="Browse Text Models">
+  <img src="screenshots/image-models-tab.jpg" width="300" alt="Image Models Tab">
+</p>
+
+### Download Manager
+
+Track active downloads and manage all your downloaded models in one place. See storage usage, delete unused models, and monitor download progress.
+
+<p align="center">
+  <img src="screenshots/download-manager-top.jpg" width="300" alt="Download Manager">
+  <img src="screenshots/download-manager-bottom.jpg" width="300" alt="Downloaded Models List">
 </p>
 
 ### On-Device Voice Transcription
@@ -302,12 +318,14 @@ For power users, a comprehensive debug panel shows exactly what's happening: con
   <img src="screenshots/Screenshot_2026-01-30-12-30-40-03_f28200242d1465b50ec18721116dc637.jpg" width="250" alt="Debug ChatML">
 </p>
 
-### Security & Settings
+### Settings & Model Configuration
 
-Optional passphrase lock protects your conversations. Device information helps you understand what hardware is running your AI.
+Configure model behavior, image generation, GPU acceleration, and security from the Settings screen.
 
 <p align="center">
-  <img src="screenshots/Screenshot_2026-01-30-12-31-07-25_f28200242d1465b50ec18721116dc637.jpg" width="300" alt="Settings">
+  <img src="screenshots/settings-screen.jpg" width="250" alt="Settings">
+  <img src="screenshots/model-settings-top.jpg" width="250" alt="Model Settings">
+  <img src="screenshots/model-settings-bottom.jpg" width="250" alt="Model Settings - GPU">
 </p>
 
 ---

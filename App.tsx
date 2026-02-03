@@ -11,8 +11,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { AppNavigator } from './src/navigation';
 import { COLORS } from './src/constants';
-import { hardwareService, modelManager, authService, activeModelService } from './src/services';
-import { useAppStore, useAuthStore, useWhisperStore } from './src/stores';
+import { hardwareService, modelManager, authService } from './src/services';
+import { useAppStore, useAuthStore } from './src/stores';
 import { LockScreen } from './src/screens';
 import { useAppState } from './src/hooks/useAppState';
 
@@ -29,11 +29,6 @@ function App() {
     setLocked,
     setLastBackgroundTime,
   } = useAuthStore();
-
-  const {
-    downloadedModelId: whisperModelId,
-    loadModel: loadWhisperModel,
-  } = useWhisperStore();
 
   // Handle app state changes for auto-lock
   useAppState({
@@ -102,53 +97,8 @@ function App() {
       // Show the UI immediately
       setIsInitializing(false);
 
-      // Phase 2: Background model loading - don't block UI
-      // Load models in background after UI is shown
-      const currentState = useAppStore.getState();
-      const currentActiveModelId = currentState.activeModelId;
-      const currentActiveImageModelId = currentState.activeImageModelId;
-
-      // Load Whisper model if downloaded (for voice transcription)
-      if (whisperModelId) {
-        console.log('[App] Loading Whisper model in background:', whisperModelId);
-        loadWhisperModel()
-          .then(() => console.log('[App] Whisper model loaded'))
-          .catch(err => console.error('[App] Failed to load Whisper model:', err));
-      }
-
-      // Load text model in background
-      if (currentActiveModelId) {
-        const textModel = downloadedModels.find(m => m.id === currentActiveModelId);
-        if (textModel) {
-          console.log('[App] Loading text model in background:', textModel.name);
-          activeModelService.loadTextModel(currentActiveModelId)
-            .then(() => console.log('[App] Text model loaded successfully'))
-            .catch(err => {
-              console.error('[App] Failed to load text model:', err);
-              useAppStore.getState().setActiveModelId(null);
-            });
-        } else {
-          console.log('[App] Previously active text model not found, clearing');
-          useAppStore.getState().setActiveModelId(null);
-        }
-      }
-
-      // Load image model in background
-      if (currentActiveImageModelId) {
-        const imageModel = imageModels.find(m => m.id === currentActiveImageModelId);
-        if (imageModel) {
-          console.log('[App] Loading image model in background:', imageModel.name);
-          activeModelService.loadImageModel(currentActiveImageModelId)
-            .then(() => console.log('[App] Image model loaded successfully'))
-            .catch(err => {
-              console.error('[App] Failed to load image model:', err);
-              useAppStore.getState().setActiveImageModelId(null);
-            });
-        } else {
-          console.log('[App] Previously active image model not found, clearing');
-          useAppStore.getState().setActiveImageModelId(null);
-        }
-      }
+      // Models are loaded on-demand when the user opens a chat,
+      // not eagerly on startup, to avoid freezing the UI.
     } catch (error) {
       console.error('Error initializing app:', error);
       setIsInitializing(false);

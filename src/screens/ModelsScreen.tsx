@@ -1308,6 +1308,7 @@ const styles = StyleSheet.create({
   imageModelsSection: {
     marginBottom: 24,
     paddingTop: 8,
+    paddingHorizontal: 16,
   },
   imageSectionTitle: {
     fontSize: 18,
