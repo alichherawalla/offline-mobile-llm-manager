@@ -240,7 +240,8 @@ All generated images are persisted and accessible from a dedicated Gallery scree
   - **Save**: Export to Pictures/LocalLLM on device storage
   - **Delete**: Remove the image permanently
 - **Active Generation**: If an image is being generated, a progress banner appears at the top of the gallery with preview thumbnail, progress bar, and cancel button
-- **Long-press to delete**: Quick delete from the grid view
+- **Long-press to delete**: Quick delete any image from the grid view
+- **Cascade Delete**: When you delete a chat, all images generated in that conversation are automatically deleted as well — no orphaned files left behind
 
 Image metadata is persisted across app restarts via AsyncStorage, so your gallery survives app closures.
 
