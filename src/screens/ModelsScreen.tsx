@@ -673,6 +673,17 @@ export const ModelsScreen: React.FC = () => {
     });
   }, [searchResults, credibilityFilter, modelTypeFilter, showCompatibleOnly, ramGB]);
 
+  // Filter HuggingFace image models - must be before any conditional returns
+  const filteredHFModels = useMemo(() => {
+    const query = imageSearchQuery.toLowerCase().trim();
+    return availableHFModels.filter((m) => {
+      if (backendFilter !== 'all' && m.backend !== backendFilter) return false;
+      if (downloadedImageModels.some((d) => d.id === m.id)) return false;
+      if (query && !m.displayName.toLowerCase().includes(query) && !m.name.toLowerCase().includes(query)) return false;
+      return true;
+    });
+  }, [availableHFModels, backendFilter, downloadedImageModels, imageSearchQuery]);
+
   const renderModelItem = ({ item }: { item: ModelInfo }) => {
     // Check if any file from this model is downloaded
     const isAnyFileDownloaded = downloadedModels.some((m) =>
@@ -798,16 +809,6 @@ export const ModelsScreen: React.FC = () => {
 
   // Count of active downloads for badge
   const activeDownloadCount = Object.keys(downloadProgress).length;
-
-  const filteredHFModels = useMemo(() => {
-    const query = imageSearchQuery.toLowerCase().trim();
-    return availableHFModels.filter((m) => {
-      if (backendFilter !== 'all' && m.backend !== backendFilter) return false;
-      if (downloadedImageModels.some((d) => d.id === m.id)) return false;
-      if (query && !m.displayName.toLowerCase().includes(query) && !m.name.toLowerCase().includes(query)) return false;
-      return true;
-    });
-  }, [availableHFModels, backendFilter, downloadedImageModels, imageSearchQuery]);
 
   const hfModelToDescriptor = (hfModel: HFImageModel): ImageModelDescriptor => ({
     id: hfModel.id,
