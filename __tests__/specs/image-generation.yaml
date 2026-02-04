@@ -1,0 +1,227 @@
+# Image Generation Flow Test Specification
+# Priority: P0 (Critical)
+# Image generation is a core feature of the app
+
+flow: image-generation
+priority: P0
+description: |
+  Image generation from text prompts using ONNX models.
+  Includes intent detection, model loading, and generation flow.
+
+preconditions:
+  - Image model downloaded
+  - Text model available for intent classification (if using LLM mode)
+
+test_cases:
+  # ============================================================================
+  # Unit Tests - Stores
+  # ============================================================================
+  unit:
+    appStore:
+      - id: img-001
+        name: addDownloadedImageModel adds ONNX model
+        given: No image models downloaded
+        when: addDownloadedImageModel called
+        then:
+          - Model added to downloadedImageModels
+          - Duplicate IDs are replaced
+
+      - id: img-002
+        name: setActiveImageModelId updates active model
+        given: Image models downloaded
+        when: setActiveImageModelId called
+        then: activeImageModelId updated
+
+      - id: img-003
+        name: setIsGeneratingImage updates state
+        given: Any state
+        when: setIsGeneratingImage called
+        then: isGeneratingImage reflects value
+
+      - id: img-004
+        name: setImageGenerationProgress tracks steps
+        given: Generation in progress
+        when: setImageGenerationProgress called
+        then:
+          - imageGenerationProgress has step and totalSteps
+          - Progress can be cleared with null
+
+      - id: img-005
+        name: addGeneratedImage prepends to gallery
+        given: Gallery has existing images
+        when: addGeneratedImage called
+        then:
+          - New image at start of generatedImages
+          - Existing images preserved
+
+      - id: img-006
+        name: removeGeneratedImage removes by ID
+        given: Image exists in gallery
+        when: removeGeneratedImage called
+        then: Image removed, others unchanged
+
+      - id: img-007
+        name: removeImagesByConversationId removes all for conversation
+        given: Multiple images from same conversation
+        when: removeImagesByConversationId called
+        then:
+          - All images for conversation removed
+          - Returns list of removed image IDs
+
+  # ============================================================================
+  # Unit Tests - Services
+  # ============================================================================
+    intentClassifier:
+      - id: intent-001
+        name: Pattern detection identifies image requests
+        patterns:
+          - "draw a cat" -> true
+          - "paint a sunset" -> true
+          - "generate an image of mountains" -> true
+          - "create a picture of a dog" -> true
+          - "make me an illustration" -> true
+          - "what is the capital of France" -> false
+          - "explain quantum physics" -> false
+          - "write a poem" -> false
+
+      - id: intent-002
+        name: Pattern detection handles edge cases
+        patterns:
+          - "can you draw?" -> false (question about ability)
+          - "I love drawing" -> false (statement about user)
+          - "the drawing was nice" -> false (past reference)
+
+    imageGenerationService:
+      - id: imgsvc-001
+        name: generateImage validates model is loaded
+        given: No image model loaded
+        when: generateImage called
+        then: Error thrown about no model
+
+      - id: imgsvc-002
+        name: generateImage invokes native module
+        given: Image model loaded
+        when: generateImage called with prompt
+        then:
+          - Native generate function called
+          - Progress callbacks invoked
+          - Image path returned on success
+
+      - id: imgsvc-003
+        name: generateImage updates store state
+        given: Generation starting
+        when: generateImage called
+        then:
+          - isGeneratingImage set true
+          - Progress updated during generation
+          - State reset on completion
+
+    localDreamGenerator:
+      - id: dream-001
+        name: loadModel initializes native module
+        given: Model path valid
+        when: loadModel called
+        then:
+          - Native init called
+          - Model marked as loaded
+
+      - id: dream-002
+        name: generate returns image path
+        given: Model loaded
+        when: generate called with params
+        then:
+          - Image generated at expected path
+          - Path returned to caller
+
+      - id: dream-003
+        name: unloadModel releases resources
+        given: Model loaded
+        when: unloadModel called
+        then:
+          - Native release called
+          - Model marked as unloaded
+
+  # ============================================================================
+  # Integration Tests
+  # ============================================================================
+  integration:
+    - id: int-img-001
+      name: Auto-detect triggers image generation
+      given:
+        - Text model loaded
+        - Image model loaded
+        - imageGenerationMode is 'auto'
+      when: User sends "draw a cat"
+      then:
+        - Intent classified as image request
+        - Image generation triggered
+        - Generated image added to gallery
+        - Image shown in chat
+
+    - id: int-img-002
+      name: Force image mode bypasses detection
+      given:
+        - Image model loaded
+        - User has force image mode enabled
+      when: User sends any message
+      then:
+        - No intent classification
+        - Image generation triggered directly
+
+    - id: int-img-003
+      name: Image generation with no image model
+      given:
+        - No image model downloaded
+        - Auto mode enabled
+      when: User sends image request
+      then:
+        - User prompted to download image model
+        - No generation attempted
+
+  # ============================================================================
+  # RNTL Tests
+  # ============================================================================
+  rntl:
+    - id: rntl-img-001
+      name: ChatMessage displays generated image
+      given: Message has image attachment
+      when: ChatMessage rendered
+      then: Image displayed with correct dimensions
+
+    - id: rntl-img-002
+      name: Progress indicator during generation
+      given: Image generation in progress
+      when: ChatScreen rendered
+      then:
+        - Step progress visible (e.g., "Step 5/20")
+        - Status text visible
+
+    - id: rntl-img-003
+      name: Image mode toggle in ChatInput
+      given: Image model available
+      when: ChatInput rendered
+      then: Image mode toggle accessible
+
+  # ============================================================================
+  # E2E Tests
+  # ============================================================================
+  e2e:
+    - id: e2e-img-001
+      name: Generate image from prompt
+      steps:
+        - Ensure image model downloaded
+        - Start new conversation
+        - Type "draw a beautiful sunset"
+        - Send message
+        - Verify progress indicator
+        - Wait for generation complete
+        - Verify image displayed in chat
+        - Verify image in gallery
+
+    - id: e2e-img-002
+      name: Force image mode generation
+      steps:
+        - Enable force image mode
+        - Type any text
+        - Send message
+        - Verify image generated (not text response)

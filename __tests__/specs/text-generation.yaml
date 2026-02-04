@@ -1,0 +1,241 @@
+# Text Generation Flow Test Specification
+# Priority: P0 (Critical)
+# This flow is core to the app - if broken, app is unusable
+
+flow: text-generation
+priority: P0
+description: |
+  Complete text generation flow from user input to streamed response.
+  Includes model loading, message handling, and streaming state management.
+
+preconditions:
+  - Model downloaded and stored locally
+  - App has completed onboarding
+  - Valid conversation exists or will be created
+
+test_cases:
+  # ============================================================================
+  # Unit Tests - Stores
+  # ============================================================================
+  unit:
+    chatStore:
+      - id: chat-001
+        name: createConversation creates new conversation with correct defaults
+        given: Empty chat store
+        when: createConversation called with modelId
+        then:
+          - New conversation added to conversations array
+          - Conversation has generated ID
+          - Title is "New Conversation"
+          - Messages array is empty
+          - activeConversationId is set to new ID
+          - Streaming state is reset
+
+      - id: chat-002
+        name: addMessage appends message to correct conversation
+        given: Conversation exists
+        when: addMessage called with conversationId and message data
+        then:
+          - Message added to conversation's messages array
+          - Message has generated ID and timestamp
+          - Conversation updatedAt is updated
+          - Returns created message
+
+      - id: chat-003
+        name: addMessage updates title from first user message
+        given: Conversation with default title "New Conversation"
+        when: First user message added
+        then:
+          - Title updated to first 50 chars of message content
+          - Truncation indicator added if message > 50 chars
+
+      - id: chat-004
+        name: startStreaming initializes streaming state
+        given: Active conversation
+        when: startStreaming called with conversationId
+        then:
+          - streamingForConversationId set to conversationId
+          - streamingMessage is empty string
+          - isStreaming is false
+          - isThinking is true
+
+      - id: chat-005
+        name: appendToStreamingMessage accumulates tokens
+        given: Streaming started
+        when: appendToStreamingMessage called multiple times
+        then:
+          - streamingMessage contains all appended tokens
+          - isStreaming becomes true
+          - isThinking becomes false
+          - Control tokens are stripped
+
+      - id: chat-006
+        name: finalizeStreamingMessage saves message
+        given: Streaming in progress with content
+        when: finalizeStreamingMessage called
+        then:
+          - Assistant message added to conversation
+          - streamingMessage cleared
+          - streamingForConversationId cleared
+          - isStreaming and isThinking reset to false
+          - generationTimeMs recorded if provided
+
+      - id: chat-007
+        name: clearStreamingMessage aborts without saving
+        given: Streaming in progress
+        when: clearStreamingMessage called
+        then:
+          - No message added to conversation
+          - All streaming state reset
+
+    appStore:
+      - id: app-001
+        name: setActiveModelId updates active model
+        given: Downloaded models exist
+        when: setActiveModelId called
+        then: activeModelId updated to provided value
+
+      - id: app-002
+        name: addDownloadedModel adds new model
+        given: Model not in downloadedModels
+        when: addDownloadedModel called
+        then:
+          - Model added to downloadedModels
+          - Duplicates are replaced (by ID)
+
+      - id: app-003
+        name: removeDownloadedModel clears active if deleted
+        given: Model is currently active
+        when: removeDownloadedModel called for active model
+        then:
+          - Model removed from downloadedModels
+          - activeModelId set to null
+
+      - id: app-004
+        name: updateSettings merges partial settings
+        given: Default settings
+        when: updateSettings called with partial object
+        then:
+          - Only provided settings updated
+          - Other settings unchanged
+
+  # ============================================================================
+  # Unit Tests - Services
+  # ============================================================================
+    generationService:
+      - id: gen-001
+        name: getState returns current state immutably
+        given: Service in any state
+        when: getState called
+        then: Returns copy of state, modifications don't affect service
+
+      - id: gen-002
+        name: isGeneratingFor returns true only for active conversation
+        given: Generating for conversation A
+        when: isGeneratingFor called
+        then:
+          - Returns true for conversation A
+          - Returns false for conversation B
+
+      - id: gen-003
+        name: subscribe receives immediate callback with current state
+        given: Service in any state
+        when: subscribe called
+        then: Listener immediately called with current state
+
+      - id: gen-004
+        name: generateResponse rejects when already generating
+        given: Generation in progress
+        when: generateResponse called again
+        then: Second call returns immediately without starting
+
+      - id: gen-005
+        name: generateResponse throws when no model loaded
+        given: No model loaded (llmService.isModelLoaded returns false)
+        when: generateResponse called
+        then: Error thrown "No model loaded"
+
+      - id: gen-006
+        name: stopGeneration saves partial content
+        given: Generation in progress with accumulated content
+        when: stopGeneration called
+        then:
+          - Native generation stopped
+          - Partial content saved as message
+          - State reset
+
+      - id: gen-007
+        name: stopGeneration discards if no content
+        given: Generation in progress but no tokens received
+        when: stopGeneration called
+        then:
+          - No message saved
+          - Streaming message cleared
+
+  # ============================================================================
+  # Integration Tests
+  # ============================================================================
+  integration:
+    - id: int-001
+      name: Full generation flow updates both stores
+      given:
+        - Model loaded in llmService
+        - Conversation exists in chatStore
+      when: generationService.generateResponse called
+      then:
+        - chatStore.startStreaming called
+        - Tokens appended to chatStore.streamingMessage
+        - Message finalized in chatStore when complete
+        - generationService state reset
+
+    - id: int-002
+      name: Generation abort preserves partial response
+      given: Generation in progress with tokens
+      when: stopGeneration called mid-stream
+      then:
+        - Partial message saved to conversation
+        - generationMeta includes partial stats
+
+  # ============================================================================
+  # RNTL Tests
+  # ============================================================================
+  rntl:
+    - id: rntl-001
+      name: ChatScreen shows thinking indicator when generating
+      given: Generation started
+      when: ChatScreen rendered
+      then: Thinking indicator visible
+
+    - id: rntl-002
+      name: ChatScreen displays streaming tokens
+      given: Streaming in progress
+      when: Tokens received
+      then: Streaming message updated in UI
+
+    - id: rntl-003
+      name: ChatInput disabled during generation
+      given: Generation in progress
+      when: ChatScreen rendered
+      then: Input field disabled, send button hidden, stop button visible
+
+    - id: rntl-004
+      name: Stop button calls stopGeneration
+      given: Generation in progress
+      when: Stop button pressed
+      then: generationService.stopGeneration called
+
+  # ============================================================================
+  # E2E Tests
+  # ============================================================================
+  e2e:
+    - id: e2e-001
+      name: Complete text generation flow
+      steps:
+        - Open app with downloaded model
+        - Tap new conversation
+        - Type message in input
+        - Tap send
+        - Verify thinking indicator appears
+        - Verify streaming text appears
+        - Verify final message displayed
+        - Verify generation metadata shown (if enabled)

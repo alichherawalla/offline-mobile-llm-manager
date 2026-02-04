@@ -1,0 +1,222 @@
+# Model Lifecycle Flow Test Specification
+# Priority: P0 (Critical)
+# Models must load/unload correctly for app to function
+
+flow: model-lifecycle
+priority: P0
+description: |
+  Model download, loading, switching, and unloading flows.
+  Critical for memory management and app stability.
+
+preconditions:
+  - Network available (for download tests)
+  - Sufficient storage space
+
+test_cases:
+  # ============================================================================
+  # Unit Tests - Stores
+  # ============================================================================
+  unit:
+    appStore:
+      - id: model-001
+        name: addDownloadedModel replaces existing model with same ID
+        given: Model A exists in downloadedModels
+        when: addDownloadedModel called with updated Model A
+        then:
+          - Only one Model A exists
+          - Model A has updated properties
+
+      - id: model-002
+        name: removeDownloadedModel removes model from list
+        given: Multiple models downloaded
+        when: removeDownloadedModel called
+        then:
+          - Target model removed
+          - Other models unchanged
+
+      - id: model-003
+        name: setDownloadProgress tracks download
+        given: Download starting
+        when: setDownloadProgress called with progress
+        then:
+          - Progress stored for modelId
+          - Previous progress replaced
+
+      - id: model-004
+        name: setDownloadProgress null clears progress
+        given: Download in progress
+        when: setDownloadProgress called with null
+        then: Progress entry removed for modelId
+
+      - id: model-005
+        name: setIsLoadingModel updates loading state
+        given: Any state
+        when: setIsLoadingModel called
+        then: isLoadingModel reflects provided value
+
+  # ============================================================================
+  # Unit Tests - Services
+  # ============================================================================
+    activeModelService:
+      - id: active-001
+        name: getActiveModels returns loaded model info
+        given: Model loaded
+        when: getActiveModels called
+        then:
+          - Returns object with text model info
+          - Includes model ID and context
+
+      - id: active-002
+        name: checkMemoryAvailable validates against device memory
+        given: Device info available
+        when: checkMemoryAvailable called with model size
+        then:
+          - Returns true if enough memory
+          - Returns false with reason if not enough
+
+      - id: active-003
+        name: loadModel initializes llama context
+        given: Model file exists
+        when: loadModel called
+        then:
+          - llmService.loadModel called
+          - appStore.activeModelId updated
+          - Listeners notified
+
+      - id: active-004
+        name: loadModel unloads existing model first
+        given: Different model already loaded
+        when: loadModel called for new model
+        then:
+          - Existing model unloaded first
+          - New model loaded
+          - State updated correctly
+
+      - id: active-005
+        name: unloadModel releases context
+        given: Model loaded
+        when: unloadModel called
+        then:
+          - llmService.releaseContext called
+          - appStore.activeModelId cleared
+          - Memory freed
+
+      - id: active-006
+        name: subscribe notifies on state changes
+        given: Subscriber registered
+        when: Model loaded or unloaded
+        then: Subscriber callback invoked with new state
+
+    modelManager:
+      - id: mm-001
+        name: listAvailableModels fetches from HuggingFace
+        given: Network available
+        when: listAvailableModels called
+        then:
+          - Returns array of ModelInfo
+          - Models have files with download URLs
+
+      - id: mm-002
+        name: downloadModel streams to file system
+        given: Valid model info
+        when: downloadModel called
+        then:
+          - File downloaded to correct path
+          - Progress callbacks invoked
+          - DownloadedModel returned on success
+
+      - id: mm-003
+        name: downloadModel handles network errors
+        given: Network fails mid-download
+        when: Error occurs
+        then:
+          - Partial file cleaned up
+          - Error thrown with message
+
+      - id: mm-004
+        name: deleteModel removes file and metadata
+        given: Model downloaded
+        when: deleteModel called
+        then:
+          - File deleted from filesystem
+          - appStore.removeDownloadedModel called
+
+  # ============================================================================
+  # Integration Tests
+  # ============================================================================
+  integration:
+    - id: int-model-001
+      name: Download and load flow
+      given: Model not downloaded
+      when:
+        - downloadModel called
+        - Model finishes downloading
+        - loadModel called
+      then:
+        - Model in downloadedModels
+        - Model is activeModelId
+        - LLM context initialized
+
+    - id: int-model-002
+      name: Model switch unloads and loads
+      given: Model A loaded
+      when: User selects Model B
+      then:
+        - Model A unloaded (context released)
+        - Model B loaded
+        - Active model ID updated
+
+    - id: int-model-003
+      name: Delete active model clears active
+      given: Model is active
+      when: deleteModel called
+      then:
+        - Model unloaded first
+        - Model deleted from storage
+        - activeModelId cleared
+
+  # ============================================================================
+  # RNTL Tests
+  # ============================================================================
+  rntl:
+    - id: rntl-model-001
+      name: ModelsScreen shows download progress
+      given: Download in progress
+      when: ModelsScreen rendered
+      then: Progress bar visible with percentage
+
+    - id: rntl-model-002
+      name: ModelsScreen shows loading indicator
+      given: Model loading
+      when: ModelsScreen rendered
+      then: Loading spinner visible
+
+    - id: rntl-model-003
+      name: Model card shows active state
+      given: Model is active
+      when: Model card rendered
+      then: Active indicator visible
+
+  # ============================================================================
+  # E2E Tests
+  # ============================================================================
+  e2e:
+    - id: e2e-model-001
+      name: Download model flow
+      steps:
+        - Navigate to Models screen
+        - Tap Browse Models
+        - Select a model
+        - Select quantization
+        - Tap Download
+        - Wait for download to complete
+        - Verify model appears in downloaded list
+
+    - id: e2e-model-002
+      name: Load and chat with model
+      steps:
+        - Select downloaded model
+        - Wait for model to load
+        - Navigate to Chat
+        - Send a message
+        - Verify response generated
