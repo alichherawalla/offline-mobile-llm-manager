@@ -203,7 +203,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   // Render system info messages (model loaded/unloaded) differently
   if (message.isSystemInfo) {
     return (
-      <View style={styles.systemInfoContainer}>
+      <View testID="system-info-message" style={styles.systemInfoContainer}>
         <Text style={styles.systemInfoText}>{displayContent}</Text>
       </View>
     );
@@ -212,6 +212,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   return (
     <>
       <TouchableOpacity
+        testID={`message-container-${message.role}`}
         style={[
           styles.container,
           isUser ? styles.userContainer : styles.assistantContainer,
@@ -229,15 +230,17 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         >
           {/* Attachments */}
           {hasAttachments && (
-            <View style={styles.attachmentsContainer}>
-              {message.attachments!.map((attachment) => (
+            <View testID="message-attachments" style={styles.attachmentsContainer}>
+              {message.attachments!.map((attachment, index) => (
                 <TouchableOpacity
                   key={attachment.id}
+                  testID={`message-attachment-${index}`}
                   style={styles.attachmentWrapper}
                   onPress={() => onImagePress?.(attachment.uri)}
                   activeOpacity={0.8}
                 >
                   <Image
+                    testID={`message-image-${index}`}
                     source={{ uri: attachment.uri }}
                     style={styles.attachmentImage}
                     resizeMode="cover"
@@ -249,13 +252,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
           {/* Text content */}
           {message.isThinking ? (
-            <ThinkingIndicator />
+            <View testID="thinking-indicator"><ThinkingIndicator /></View>
           ) : message.content ? (
             <View>
               {/* Thinking block for assistant messages */}
               {parsedContent.thinking && (
-                <View style={styles.thinkingBlock}>
+                <View testID="thinking-block" style={styles.thinkingBlock}>
                   <TouchableOpacity
+                    testID="thinking-block-toggle"
                     style={styles.thinkingHeader}
                     onPress={() => setShowThinking(!showThinking)}
                   >
@@ -264,7 +268,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                         {parsedContent.isThinkingComplete ? 'T' : '...'}
                       </Text>
                     </View>
-                    <Text style={styles.thinkingHeaderText}>
+                    <Text testID="thinking-block-title" style={styles.thinkingHeaderText}>
                       {parsedContent.isThinkingComplete ? 'Thought process' : 'Thinking...'}
                     </Text>
                     <Text style={styles.thinkingToggle}>
@@ -272,7 +276,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                     </Text>
                   </TouchableOpacity>
                   {showThinking && (
-                    <Text style={styles.thinkingBlockText} selectable>
+                    <Text testID="thinking-block-content" style={styles.thinkingBlockText} selectable>
                       {parsedContent.thinking}
                     </Text>
                   )}
@@ -282,26 +286,27 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
               {/* Main response */}
               {parsedContent.response ? (
                 <Text
+                  testID="message-text"
                   style={[styles.text, isUser ? styles.userText : styles.assistantText]}
                   selectable
                 >
                   {parsedContent.response}
-                  {isStreaming && <Text style={styles.cursor}>|</Text>}
+                  {isStreaming && <Text testID="streaming-cursor" style={styles.cursor}>|</Text>}
                 </Text>
               ) : isStreaming && !parsedContent.isThinkingComplete ? (
                 /* Still in thinking phase, show indicator */
-                <View style={styles.streamingThinkingHint}>
+                <View testID="streaming-thinking-hint" style={styles.streamingThinkingHint}>
                   <ThinkingIndicator />
                 </View>
               ) : isStreaming ? (
-                <Text style={[styles.text, styles.assistantText]}>
-                  <Text style={styles.cursor}>|</Text>
+                <Text testID="message-text" style={[styles.text, styles.assistantText]}>
+                  <Text testID="streaming-cursor" style={styles.cursor}>|</Text>
                 </Text>
               ) : null}
             </View>
           ) : isStreaming ? (
-            <Text style={[styles.text, styles.assistantText]}>
-              <Text style={styles.cursor}>|</Text>
+            <Text testID="message-text" style={[styles.text, styles.assistantText]}>
+              <Text testID="streaming-cursor" style={styles.cursor}>|</Text>
             </Text>
           ) : null}
         </View>
@@ -325,7 +330,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
         {/* Generation details */}
         {showGenerationDetails && message.generationMeta && message.role === 'assistant' && (
-          <View style={styles.generationMetaRow}>
+          <View testID="generation-meta" style={styles.generationMetaRow}>
             <Text style={styles.generationMetaText}>
               {message.generationMeta.gpuBackend || (message.generationMeta.gpu ? 'GPU' : 'CPU')}
               {message.generationMeta.gpuLayers != null && message.generationMeta.gpuLayers > 0
@@ -405,8 +410,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           activeOpacity={1}
           onPress={() => setShowActionMenu(false)}
         >
-          <View style={styles.actionMenu}>
-            <TouchableOpacity style={styles.actionItem} onPress={handleCopy}>
+          <View testID="action-menu" style={styles.actionMenu}>
+            <TouchableOpacity testID="action-copy" style={styles.actionItem} onPress={handleCopy}>
               <View style={styles.actionIconBox}>
                 <Text style={styles.actionIconText}>C</Text>
               </View>
@@ -414,7 +419,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             </TouchableOpacity>
 
             {isUser && onEdit && (
-              <TouchableOpacity style={styles.actionItem} onPress={handleEdit}>
+              <TouchableOpacity testID="action-edit" style={styles.actionItem} onPress={handleEdit}>
                 <View style={styles.actionIconBox}>
                   <Text style={styles.actionIconText}>E</Text>
                 </View>
@@ -423,7 +428,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             )}
 
             {onRetry && (
-              <TouchableOpacity style={styles.actionItem} onPress={handleRetry}>
+              <TouchableOpacity testID="action-retry" style={styles.actionItem} onPress={handleRetry}>
                 <View style={styles.actionIconBox}>
                   <Text style={styles.actionIconText}>R</Text>
                 </View>
@@ -434,7 +439,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             )}
 
             {canGenerateImage && onGenerateImage && (
-              <TouchableOpacity style={styles.actionItem} onPress={handleGenerateImage}>
+              <TouchableOpacity testID="action-generate-image" style={styles.actionItem} onPress={handleGenerateImage}>
                 <View style={[styles.actionIconBox, styles.actionIconBoxImage]}>
                   <Text style={styles.actionIconText}>I</Text>
                 </View>
@@ -443,6 +448,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             )}
 
             <TouchableOpacity
+              testID="action-cancel"
               style={[styles.actionItem, styles.actionItemCancel]}
               onPress={() => setShowActionMenu(false)}
             >

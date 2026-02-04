@@ -12,27 +12,28 @@
 
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 import { ChatMessage } from '../../../src/components/ChatMessage';
 import {
   createMessage,
   createUserMessage,
   createAssistantMessage,
   createSystemMessage,
-  createMediaAttachment,
   createImageAttachment,
   createDocumentAttachment,
   createGenerationMeta,
 } from '../../utils/factories';
 
-// Mock clipboard
-const mockSetString = jest.fn();
-jest.mock('@react-native-clipboard/clipboard', () => ({
-  setString: mockSetString,
-}), { virtual: true });
+// The Clipboard warning is expected (deprecated in RN). No additional mock needed
+// as the tests will still work with the deprecated API.
 
-// Mock Alert using jest.spyOn instead of full mock to avoid DevMenu issues
-import { Alert } from 'react-native';
-const mockAlert = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+// Mock Alert
+jest.spyOn(Alert, 'alert');
+
+// Mock the stripControlTokens utility
+jest.mock('../../../src/utils/messageContent', () => ({
+  stripControlTokens: (content: string) => content,
+}));
 
 describe('ChatMessage', () => {
   const defaultProps = {
@@ -78,8 +79,9 @@ describe('ChatMessage', () => {
         isSystemInfo: true,
       });
 
-      const { getByText } = render(<ChatMessage message={message} />);
+      const { getByTestId, getByText } = render(<ChatMessage message={message} />);
 
+      expect(getByTestId('system-info-message')).toBeTruthy();
       expect(getByText('Model loaded successfully')).toBeTruthy();
     });
 
@@ -99,6 +101,22 @@ describe('ChatMessage', () => {
 
       expect(getByText(longContent)).toBeTruthy();
     });
+
+    it('renders user message with right alignment container', () => {
+      const message = createUserMessage('User message');
+
+      const { getByTestId } = render(<ChatMessage message={message} />);
+
+      expect(getByTestId('message-container-user')).toBeTruthy();
+    });
+
+    it('renders assistant message with left alignment container', () => {
+      const message = createAssistantMessage('Assistant message');
+
+      const { getByTestId } = render(<ChatMessage message={message} />);
+
+      expect(getByTestId('message-container-assistant')).toBeTruthy();
+    });
   });
 
   // ============================================================================
@@ -108,12 +126,11 @@ describe('ChatMessage', () => {
     it('shows streaming cursor when isStreaming is true', () => {
       const message = createAssistantMessage('Generating...');
 
-      const { getByTestId, queryByTestId } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} isStreaming={true} />
       );
 
-      // Look for streaming indicator (may be cursor or animation)
-      // The exact testID depends on implementation
+      expect(getByTestId('streaming-cursor')).toBeTruthy();
     });
 
     it('hides streaming cursor when isStreaming is false', () => {
@@ -123,7 +140,7 @@ describe('ChatMessage', () => {
         <ChatMessage message={message} isStreaming={false} />
       );
 
-      // No streaming indicator
+      expect(queryByTestId('streaming-cursor')).toBeNull();
     });
 
     it('renders partial content during streaming', () => {
@@ -134,6 +151,16 @@ describe('ChatMessage', () => {
       );
 
       expect(getByText(/Partial cont/)).toBeTruthy();
+    });
+
+    it('shows cursor when streaming empty content', () => {
+      const message = createAssistantMessage('');
+
+      const { getByTestId } = render(
+        <ChatMessage message={message} isStreaming={true} />
+      );
+
+      expect(getByTestId('streaming-cursor')).toBeTruthy();
     });
   });
 
@@ -146,56 +173,69 @@ describe('ChatMessage', () => {
         '<think>Let me analyze this problem step by step...</think>The answer is 42.'
       );
 
-      const { getByText } = render(<ChatMessage message={message} />);
+      const { getByText, getByTestId } = render(<ChatMessage message={message} />);
 
       // Main content should be visible
       expect(getByText(/The answer is 42/)).toBeTruthy();
+      // Thinking block should exist
+      expect(getByTestId('thinking-block')).toBeTruthy();
     });
 
-    it('makes thinking block collapsible', () => {
+    it('shows Thought process header when thinking is complete', () => {
       const message = createAssistantMessage(
         '<think>Internal reasoning here</think>Final answer.'
       );
 
-      const { getByText } = render(<ChatMessage message={message} />);
+      const { getByTestId, getByText } = render(<ChatMessage message={message} />);
 
-      // Should show "Thought process" or similar header
-      // The thinking content may be hidden initially
+      expect(getByTestId('thinking-block-title')).toBeTruthy();
+      expect(getByText('Thought process')).toBeTruthy();
     });
 
-    it('handles nested content in thinking blocks', () => {
+    it('expands thinking block when toggle is pressed', () => {
       const message = createAssistantMessage(
-        '<think>Step 1: Check input\nStep 2: Process\nStep 3: Return</think>Done!'
+        '<think>Step 1: Check input\nStep 2: Process</think>Done!'
       );
 
-      const { getByText } = render(<ChatMessage message={message} />);
+      const { getByTestId, queryByTestId } = render(<ChatMessage message={message} />);
 
-      expect(getByText(/Done!/)).toBeTruthy();
+      // Initially collapsed
+      expect(queryByTestId('thinking-block-content')).toBeNull();
+
+      // Press toggle
+      fireEvent.press(getByTestId('thinking-block-toggle'));
+
+      // Content should be visible
+      expect(getByTestId('thinking-block-content')).toBeTruthy();
     });
 
-    it('handles unclosed thinking tags gracefully', () => {
+    it('shows Thinking... header when thinking is incomplete', () => {
       const message = createAssistantMessage(
         '<think>Thinking in progress...'
       );
 
-      // Should not crash
-      const { getByText } = render(
+      const { getByTestId, getAllByText } = render(
         <ChatMessage message={message} isStreaming={true} />
       );
+
+      // Thinking block exists and shows "Thinking..." in the title
+      expect(getByTestId('thinking-block')).toBeTruthy();
+      // At least one element shows "Thinking..." (may be multiple due to indicator)
+      expect(getAllByText('Thinking...').length).toBeGreaterThan(0);
     });
 
-    it('shows thinking indicator during active thinking', () => {
+    it('shows thinking indicator when message.isThinking is true', () => {
       const message = createMessage({
         role: 'assistant',
-        content: '<think>Processing...',
+        content: '',
         isThinking: true,
       });
 
-      const { getByText } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} isStreaming={true} />
       );
 
-      // Should show some form of thinking indicator
+      expect(getByTestId('thinking-indicator')).toBeTruthy();
     });
   });
 
@@ -211,9 +251,10 @@ describe('ChatMessage', () => {
         attachments: [attachment],
       });
 
-      const { UNSAFE_getByType } = render(<ChatMessage message={message} />);
+      const { getByTestId } = render(<ChatMessage message={message} />);
 
-      // Should render an Image component
+      expect(getByTestId('message-attachments')).toBeTruthy();
+      expect(getByTestId('message-image-0')).toBeTruthy();
     });
 
     it('renders multiple image attachments', () => {
@@ -224,22 +265,12 @@ describe('ChatMessage', () => {
       ];
       const message = createUserMessage('Multiple images', { attachments });
 
-      const { getByText } = render(<ChatMessage message={message} />);
+      const { getByTestId, getByText } = render(<ChatMessage message={message} />);
 
       expect(getByText('Multiple images')).toBeTruthy();
-    });
-
-    it('renders document attachment with file icon', () => {
-      const attachment = createDocumentAttachment({
-        fileName: 'document.pdf',
-      });
-      const message = createUserMessage('See attached doc', {
-        attachments: [attachment],
-      });
-
-      const { getByText } = render(<ChatMessage message={message} />);
-
-      // Document should show filename or icon
+      expect(getByTestId('message-image-0')).toBeTruthy();
+      expect(getByTestId('message-image-1')).toBeTruthy();
+      expect(getByTestId('message-image-2')).toBeTruthy();
     });
 
     it('calls onImagePress when image is tapped', () => {
@@ -253,9 +284,9 @@ describe('ChatMessage', () => {
         <ChatMessage message={message} onImagePress={onImagePress} />
       );
 
-      // Find and tap the image
-      // fireEvent.press(getByTestId('message-image'));
-      // expect(onImagePress).toHaveBeenCalledWith(attachment.uri);
+      fireEvent.press(getByTestId('message-attachment-0'));
+
+      expect(onImagePress).toHaveBeenCalledWith('file:///test/image.jpg');
     });
 
     it('renders generated image in assistant message', () => {
@@ -268,9 +299,10 @@ describe('ChatMessage', () => {
         attachments: [attachment],
       });
 
-      const { getByText } = render(<ChatMessage message={message} />);
+      const { getByText, getByTestId } = render(<ChatMessage message={message} />);
 
       expect(getByText(/Here is your image/)).toBeTruthy();
+      expect(getByTestId('message-image-0')).toBeTruthy();
     });
   });
 
@@ -278,85 +310,117 @@ describe('ChatMessage', () => {
   // Action Menu
   // ============================================================================
   describe('action menu', () => {
-    it('shows action menu on long press when showActions is true', async () => {
+    it('shows action menu on long press when showActions is true', () => {
       const message = createAssistantMessage('Long press me');
 
-      const { getByText } = render(
+      const { getByTestId, getByText } = render(
         <ChatMessage message={message} showActions={true} />
       );
 
-      const messageElement = getByText('Long press me');
-      fireEvent(messageElement, 'longPress');
+      fireEvent(getByTestId('message-container-assistant'), 'longPress');
 
       // Action menu should appear
+      expect(getByTestId('action-menu')).toBeTruthy();
+      expect(getByText('Copy')).toBeTruthy();
     });
 
     it('does not show action menu when showActions is false', () => {
       const message = createAssistantMessage('No actions');
 
-      const { getByText, queryByText } = render(
+      const { getByTestId, queryByTestId } = render(
         <ChatMessage message={message} showActions={false} />
       );
 
-      fireEvent(getByText('No actions'), 'longPress');
+      fireEvent(getByTestId('message-container-assistant'), 'longPress');
 
       // No menu should appear
-      expect(queryByText('Copy')).toBeNull();
+      expect(queryByTestId('action-menu')).toBeNull();
     });
 
-    it('calls onCopy when copy action is selected', async () => {
+    it('does not show action menu during streaming', () => {
+      const message = createAssistantMessage('Streaming...');
+
+      const { getByTestId, queryByTestId } = render(
+        <ChatMessage message={message} showActions={true} isStreaming={true} />
+      );
+
+      fireEvent(getByTestId('message-container-assistant'), 'longPress');
+
+      expect(queryByTestId('action-menu')).toBeNull();
+    });
+
+    it('calls onCopy and shows alert when copy is pressed', () => {
       const onCopy = jest.fn();
       const message = createAssistantMessage('Copy this text');
 
-      const { getByText } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} onCopy={onCopy} showActions={true} />
       );
 
-      // Trigger long press and select copy
-      fireEvent(getByText('Copy this text'), 'longPress');
+      // Open menu
+      fireEvent(getByTestId('message-container-assistant'), 'longPress');
 
-      // In actual implementation, this would open a menu
-      // and then call onCopy when "Copy" is selected
+      // Press copy
+      fireEvent.press(getByTestId('action-copy'));
+
+      // onCopy callback is called with the message content
+      expect(onCopy).toHaveBeenCalledWith('Copy this text');
+      // Alert is shown
+      expect(Alert.alert).toHaveBeenCalledWith('Copied', 'Message copied to clipboard');
     });
 
-    it('calls onRetry when retry action is selected', () => {
+    it('calls onRetry when retry is pressed', () => {
       const onRetry = jest.fn();
       const message = createAssistantMessage('Retry this');
 
-      const { getByText } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} onRetry={onRetry} showActions={true} />
       );
 
-      // Trigger retry action
+      // Open menu
+      fireEvent(getByTestId('message-container-assistant'), 'longPress');
+
+      // Press retry
+      fireEvent.press(getByTestId('action-retry'));
+
+      expect(onRetry).toHaveBeenCalledWith(message);
     });
 
-    it('calls onEdit for user messages when edit action is selected', () => {
+    it('shows edit option for user messages', () => {
       const onEdit = jest.fn();
       const message = createUserMessage('Edit me');
 
-      const { getByText } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} onEdit={onEdit} showActions={true} />
       );
 
-      // Edit should be available for user messages
+      // Open menu
+      fireEvent(getByTestId('message-container-user'), 'longPress');
+
+      // Edit should be available
+      expect(getByTestId('action-edit')).toBeTruthy();
     });
 
     it('does not show edit option for assistant messages', () => {
       const onEdit = jest.fn();
       const message = createAssistantMessage('Cannot edit me');
 
-      const { getByText, queryByText } = render(
+      const { getByTestId, queryByTestId } = render(
         <ChatMessage message={message} onEdit={onEdit} showActions={true} />
       );
 
+      // Open menu
+      fireEvent(getByTestId('message-container-assistant'), 'longPress');
+
       // Edit option should not be available
+      expect(queryByTestId('action-edit')).toBeNull();
     });
 
-    it('calls onGenerateImage when image generation action is selected', () => {
+    it('shows generate image option when canGenerateImage is true', () => {
       const onGenerateImage = jest.fn();
       const message = createUserMessage('A beautiful sunset over mountains');
 
-      const { getByText } = render(
+      const { getByTestId } = render(
         <ChatMessage
           message={message}
           onGenerateImage={onGenerateImage}
@@ -365,14 +429,17 @@ describe('ChatMessage', () => {
         />
       );
 
-      // Generate image action should be available
+      // Open menu
+      fireEvent(getByTestId('message-container-user'), 'longPress');
+
+      expect(getByTestId('action-generate-image')).toBeTruthy();
     });
 
     it('hides generate image action when canGenerateImage is false', () => {
       const onGenerateImage = jest.fn();
       const message = createUserMessage('Some text');
 
-      const { queryByText } = render(
+      const { getByTestId, queryByTestId } = render(
         <ChatMessage
           message={message}
           onGenerateImage={onGenerateImage}
@@ -381,7 +448,47 @@ describe('ChatMessage', () => {
         />
       );
 
-      // Generate image option should not be available
+      // Open menu
+      fireEvent(getByTestId('message-container-user'), 'longPress');
+
+      expect(queryByTestId('action-generate-image')).toBeNull();
+    });
+
+    it('calls onGenerateImage with truncated prompt', () => {
+      const onGenerateImage = jest.fn();
+      const message = createUserMessage('A beautiful sunset');
+
+      const { getByTestId } = render(
+        <ChatMessage
+          message={message}
+          onGenerateImage={onGenerateImage}
+          canGenerateImage={true}
+          showActions={true}
+        />
+      );
+
+      // Open menu and generate
+      fireEvent(getByTestId('message-container-user'), 'longPress');
+      fireEvent.press(getByTestId('action-generate-image'));
+
+      expect(onGenerateImage).toHaveBeenCalledWith('A beautiful sunset');
+    });
+
+    it('closes action menu when cancel is pressed', () => {
+      const message = createAssistantMessage('Test');
+
+      const { getByTestId, queryByTestId } = render(
+        <ChatMessage message={message} showActions={true} />
+      );
+
+      // Open menu
+      fireEvent(getByTestId('message-container-assistant'), 'longPress');
+      expect(getByTestId('action-menu')).toBeTruthy();
+
+      // Press cancel
+      fireEvent.press(getByTestId('action-cancel'));
+
+      expect(queryByTestId('action-menu')).toBeNull();
     });
   });
 
@@ -389,7 +496,7 @@ describe('ChatMessage', () => {
   // Generation Metadata
   // ============================================================================
   describe('generation metadata', () => {
-    it('displays generation details when showGenerationDetails is true', () => {
+    it('displays generation metadata when showGenerationDetails is true', () => {
       const meta = createGenerationMeta({
         gpu: true,
         gpuBackend: 'Metal',
@@ -401,14 +508,15 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByText } = render(
+      const { getByTestId, getByText } = render(
         <ChatMessage message={message} showGenerationDetails={true} />
       );
 
-      // Should show some metadata
+      expect(getByTestId('generation-meta')).toBeTruthy();
+      expect(getByText('Metal')).toBeTruthy();
     });
 
-    it('shows GPU indicator when GPU was used', () => {
+    it('shows GPU backend when GPU was used', () => {
       const meta = createGenerationMeta({
         gpu: true,
         gpuBackend: 'Metal',
@@ -422,10 +530,10 @@ describe('ChatMessage', () => {
         <ChatMessage message={message} showGenerationDetails={true} />
       );
 
-      // Should indicate GPU usage
+      expect(getByText(/Metal.*32L/)).toBeTruthy();
     });
 
-    it('shows CPU indicator when GPU was not used', () => {
+    it('shows CPU when GPU was not used', () => {
       const meta = createGenerationMeta({
         gpu: false,
         gpuBackend: 'CPU',
@@ -438,7 +546,7 @@ describe('ChatMessage', () => {
         <ChatMessage message={message} showGenerationDetails={true} />
       );
 
-      // Should indicate CPU usage
+      expect(getByText('CPU')).toBeTruthy();
     });
 
     it('displays tokens per second', () => {
@@ -454,7 +562,7 @@ describe('ChatMessage', () => {
         <ChatMessage message={message} showGenerationDetails={true} />
       );
 
-      // Should show tok/s
+      expect(getByText('22.3 tok/s')).toBeTruthy();
     });
 
     it('displays time to first token', () => {
@@ -469,7 +577,7 @@ describe('ChatMessage', () => {
         <ChatMessage message={message} showGenerationDetails={true} />
       );
 
-      // Should show TTFT
+      expect(getByText(/TTFT.*0.5s/)).toBeTruthy();
     });
 
     it('displays model name', () => {
@@ -484,7 +592,7 @@ describe('ChatMessage', () => {
         <ChatMessage message={message} showGenerationDetails={true} />
       );
 
-      // Should show model name
+      expect(getByText('Phi-3-mini-Q4_K_M')).toBeTruthy();
     });
 
     it('displays image generation metadata', () => {
@@ -501,7 +609,9 @@ describe('ChatMessage', () => {
         <ChatMessage message={message} showGenerationDetails={true} />
       );
 
-      // Should show steps, guidance, resolution
+      expect(getByText('20 steps')).toBeTruthy();
+      expect(getByText('cfg 7.5')).toBeTruthy();
+      expect(getByText('512x512')).toBeTruthy();
     });
 
     it('hides metadata when showGenerationDetails is false', () => {
@@ -513,81 +623,23 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { queryByText } = render(
+      const { queryByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={false} />
       );
 
-      // Metadata should not be visible
+      expect(queryByTestId('generation-meta')).toBeNull();
     });
 
     it('handles missing generation metadata gracefully', () => {
       const message = createAssistantMessage('No metadata');
 
-      const { getByText } = render(
+      const { getByText, queryByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />
       );
 
       // Should not crash, just show message without metadata
       expect(getByText('No metadata')).toBeTruthy();
-    });
-  });
-
-  // ============================================================================
-  // Role-Based Styling
-  // ============================================================================
-  describe('role-based styling', () => {
-    it('applies user message styling (right-aligned)', () => {
-      const message = createUserMessage('User message');
-
-      const { getByText } = render(<ChatMessage message={message} />);
-
-      // User messages should be right-aligned
-      const element = getByText('User message');
-      // Check style or parent container alignment
-    });
-
-    it('applies assistant message styling (left-aligned)', () => {
-      const message = createAssistantMessage('Assistant message');
-
-      const { getByText } = render(<ChatMessage message={message} />);
-
-      // Assistant messages should be left-aligned
-    });
-
-    it('applies system message styling (centered)', () => {
-      const message = createSystemMessage('System message');
-
-      const { getByText } = render(<ChatMessage message={message} />);
-
-      // System messages may be centered or have different styling
-    });
-  });
-
-  // ============================================================================
-  // Timestamps
-  // ============================================================================
-  describe('timestamps', () => {
-    it('displays message timestamp', () => {
-      const timestamp = new Date('2024-01-15T10:30:00').getTime();
-      const message = createMessage({
-        content: 'Timestamped message',
-        timestamp,
-      });
-
-      const { getByText } = render(<ChatMessage message={message} />);
-
-      // Should show formatted time
-    });
-
-    it('formats relative time for recent messages', () => {
-      const message = createMessage({
-        content: 'Recent message',
-        timestamp: Date.now() - 60000, // 1 minute ago
-      });
-
-      const { getByText } = render(<ChatMessage message={message} />);
-
-      // May show "1m ago" or similar
+      expect(queryByTestId('generation-meta')).toBeNull();
     });
   });
 
@@ -600,7 +652,7 @@ describe('ChatMessage', () => {
 
       const { getByText } = render(<ChatMessage message={message} />);
 
-      // Should render safely without executing script
+      // Should render safely
       expect(getByText(/Test/)).toBeTruthy();
     });
 
@@ -617,7 +669,7 @@ describe('ChatMessage', () => {
 
       const { getByText } = render(<ChatMessage message={message} />);
 
-      // May or may not render markdown - just shouldn't crash
+      expect(getByText(/Bold.*italic/)).toBeTruthy();
     });
 
     it('handles code blocks', () => {
@@ -625,7 +677,7 @@ describe('ChatMessage', () => {
 
       const { getByText } = render(<ChatMessage message={message} />);
 
-      // Should display code somehow
+      expect(getByText(/const x = 1/)).toBeTruthy();
     });
 
     it('handles very long single words', () => {
@@ -634,7 +686,7 @@ describe('ChatMessage', () => {
 
       const { getByText } = render(<ChatMessage message={message} />);
 
-      // Should handle without breaking layout
+      expect(getByText(longWord)).toBeTruthy();
     });
 
     it('handles newlines and whitespace', () => {
@@ -642,7 +694,7 @@ describe('ChatMessage', () => {
 
       const { getByText } = render(<ChatMessage message={message} />);
 
-      // Should preserve some whitespace
+      expect(getByText(/Line 1.*Line 2.*Line 3/s)).toBeTruthy();
     });
   });
 });

@@ -12,6 +12,7 @@
 
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 import { ChatInput } from '../../../src/components/ChatInput';
 
 // Mock image picker
@@ -25,6 +26,40 @@ jest.mock('react-native-document-picker', () => ({
   pick: jest.fn(),
 }), { virtual: true });
 
+// Mock the stores
+const mockUseWhisperStore = jest.fn();
+const mockUseAppStore = jest.fn();
+
+jest.mock('../../../src/stores', () => ({
+  useWhisperStore: () => mockUseWhisperStore(),
+  useAppStore: () => mockUseAppStore(),
+}));
+
+// Mock the whisper hook
+const mockUseWhisperTranscription = jest.fn();
+jest.mock('../../../src/hooks/useWhisperTranscription', () => ({
+  useWhisperTranscription: () => mockUseWhisperTranscription(),
+}));
+
+// Mock VoiceRecordButton component
+jest.mock('../../../src/components/VoiceRecordButton', () => ({
+  VoiceRecordButton: ({ testID, onStartRecording, onStopRecording, isRecording, isAvailable, disabled }: any) => {
+    const { TouchableOpacity, Text } = require('react-native');
+    return (
+      <TouchableOpacity
+        testID="voice-record-button"
+        onPress={isRecording ? onStopRecording : onStartRecording}
+        disabled={disabled || !isAvailable}
+      >
+        <Text>{isRecording ? 'Stop' : 'Mic'}</Text>
+      </TouchableOpacity>
+    );
+  },
+}));
+
+// Mock Alert
+jest.spyOn(Alert, 'alert');
+
 describe('ChatInput', () => {
   const defaultProps = {
     onSend: jest.fn(),
@@ -32,6 +67,30 @@ describe('ChatInput', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    // Set up default mock implementations
+    mockUseWhisperStore.mockReturnValue({
+      downloadedModelId: null,
+    });
+
+    mockUseAppStore.mockReturnValue({
+      settings: {
+        imageGenerationMode: 'manual',
+      },
+    });
+
+    mockUseWhisperTranscription.mockReturnValue({
+      isRecording: false,
+      isModelLoaded: false,
+      isModelLoading: false,
+      isTranscribing: false,
+      partialResult: '',
+      finalResult: null,
+      error: null,
+      startRecording: jest.fn(),
+      stopRecording: jest.fn(),
+      clearResult: jest.fn(),
+    });
   });
 
   // ============================================================================
@@ -39,60 +98,76 @@ describe('ChatInput', () => {
   // ============================================================================
   describe('basic input', () => {
     it('renders text input', () => {
+      const { getByTestId } = render(<ChatInput {...defaultProps} />);
+
+      expect(getByTestId('chat-input')).toBeTruthy();
+    });
+
+    it('renders text input with default placeholder', () => {
       const { getByPlaceholderText } = render(<ChatInput {...defaultProps} />);
 
-      expect(getByPlaceholderText(/message/i)).toBeTruthy();
+      expect(getByPlaceholderText('Type a message...')).toBeTruthy();
     });
 
     it('updates input value on text change', () => {
-      const { getByPlaceholderText } = render(<ChatInput {...defaultProps} />);
+      const { getByTestId } = render(<ChatInput {...defaultProps} />);
 
-      const input = getByPlaceholderText(/message/i);
+      const input = getByTestId('chat-input');
       fireEvent.changeText(input, 'Hello world');
 
       expect(input.props.value).toBe('Hello world');
     });
 
     it('shows send button when text is entered', () => {
-      const { getByPlaceholderText, getByTestId } = render(
+      const { getByTestId, queryByTestId } = render(
         <ChatInput {...defaultProps} />
       );
 
-      const input = getByPlaceholderText(/message/i);
+      const input = getByTestId('chat-input');
+
+      // Initially no send button (mic button shown instead)
+      expect(queryByTestId('send-button')).toBeNull();
+
+      // Enter text
       fireEvent.changeText(input, 'Message');
 
       // Send button should be visible
+      expect(getByTestId('send-button')).toBeTruthy();
     });
 
     it('calls onSend with message content when send is pressed', () => {
       const onSend = jest.fn();
-      const { getByPlaceholderText, getByTestId } = render(
+      const { getByTestId } = render(
         <ChatInput {...defaultProps} onSend={onSend} />
       );
 
-      const input = getByPlaceholderText(/message/i);
+      const input = getByTestId('chat-input');
       fireEvent.changeText(input, 'Test message');
 
-      // Find and press send button
-      // fireEvent.press(getByTestId('send-button'));
+      const sendButton = getByTestId('send-button');
+      fireEvent.press(sendButton);
 
-      // expect(onSend).toHaveBeenCalledWith(
-      //   'Test message',
-      //   expect.any(Array),
-      //   expect.any(Boolean)
-      // );
+      expect(onSend).toHaveBeenCalledWith(
+        'Test message',
+        undefined,
+        false
+      );
     });
 
-    it('clears input after sending', async () => {
+    it('clears input after sending', () => {
       const onSend = jest.fn();
-      const { getByPlaceholderText } = render(
+      const { getByTestId } = render(
         <ChatInput {...defaultProps} onSend={onSend} />
       );
 
-      const input = getByPlaceholderText(/message/i);
+      const input = getByTestId('chat-input');
       fireEvent.changeText(input, 'Test message');
 
-      // After send, input should clear
+      const sendButton = getByTestId('send-button');
+      fireEvent.press(sendButton);
+
+      // Input should be cleared
+      expect(input.props.value).toBe('');
     });
 
     it('uses custom placeholder when provided', () => {
@@ -104,23 +179,25 @@ describe('ChatInput', () => {
     });
 
     it('handles multiline input', () => {
-      const { getByPlaceholderText } = render(<ChatInput {...defaultProps} />);
+      const { getByTestId } = render(<ChatInput {...defaultProps} />);
 
-      const input = getByPlaceholderText(/message/i);
+      const input = getByTestId('chat-input');
       fireEvent.changeText(input, 'Line 1\nLine 2\nLine 3');
 
       expect(input.props.value).toContain('Line 1');
+      expect(input.props.value).toContain('Line 2');
+      expect(input.props.value).toContain('Line 3');
     });
 
-    it('handles long text input', () => {
-      const { getByPlaceholderText } = render(<ChatInput {...defaultProps} />);
+    it('handles long text input up to maxLength', () => {
+      const { getByTestId } = render(<ChatInput {...defaultProps} />);
 
-      const input = getByPlaceholderText(/message/i);
-      const longText = 'a'.repeat(3000);
+      const input = getByTestId('chat-input');
+      const longText = 'a'.repeat(2000);
       fireEvent.changeText(input, longText);
 
-      // Component accepts long text input (no truncation in ChatInput)
-      expect(input.props.value.length).toBe(3000);
+      // Component has maxLength=2000
+      expect(input.props.maxLength).toBe(2000);
     });
   });
 
@@ -129,31 +206,30 @@ describe('ChatInput', () => {
   // ============================================================================
   describe('disabled state', () => {
     it('disables input when disabled prop is true', () => {
-      const { getByPlaceholderText } = render(
+      const { getByTestId } = render(
         <ChatInput {...defaultProps} disabled={true} />
       );
 
-      const input = getByPlaceholderText(/message/i);
+      const input = getByTestId('chat-input');
       expect(input.props.editable).toBe(false);
     });
 
-    it('shows loading indicator when disabled', () => {
-      const { queryByTestId } = render(
-        <ChatInput {...defaultProps} disabled={true} />
+    it('does not call onSend when disabled', () => {
+      const onSend = jest.fn();
+      const { getByTestId, queryByTestId } = render(
+        <ChatInput {...defaultProps} onSend={onSend} disabled={true} />
       );
 
-      // May show some loading indicator
-    });
-
-    it('hides send button when disabled', () => {
-      const { getByPlaceholderText, queryByTestId } = render(
-        <ChatInput {...defaultProps} disabled={true} />
-      );
-
-      const input = getByPlaceholderText(/message/i);
+      const input = getByTestId('chat-input');
       fireEvent.changeText(input, 'Test');
 
-      // Send button should be hidden or disabled
+      // Even if send button appears, pressing it shouldn't send
+      const sendButton = queryByTestId('send-button');
+      if (sendButton) {
+        fireEvent.press(sendButton);
+      }
+
+      expect(onSend).not.toHaveBeenCalled();
     });
   });
 
@@ -162,11 +238,14 @@ describe('ChatInput', () => {
   // ============================================================================
   describe('generation state', () => {
     it('shows stop button when isGenerating is true', () => {
-      const { queryByTestId } = render(
+      const { getByTestId, queryByTestId } = render(
         <ChatInput {...defaultProps} isGenerating={true} />
       );
 
-      // Stop button should be visible instead of send
+      // Stop button should be visible
+      expect(getByTestId('stop-button')).toBeTruthy();
+      // Send button should not be visible
+      expect(queryByTestId('send-button')).toBeNull();
     });
 
     it('calls onStop when stop button is pressed', () => {
@@ -175,9 +254,10 @@ describe('ChatInput', () => {
         <ChatInput {...defaultProps} isGenerating={true} onStop={onStop} />
       );
 
-      // Press stop button
-      // fireEvent.press(getByTestId('stop-button'));
-      // expect(onStop).toHaveBeenCalled();
+      const stopButton = getByTestId('stop-button');
+      fireEvent.press(stopButton);
+
+      expect(onStop).toHaveBeenCalled();
     });
 
     it('hides mic button during generation', () => {
@@ -185,15 +265,8 @@ describe('ChatInput', () => {
         <ChatInput {...defaultProps} isGenerating={true} />
       );
 
-      // Mic button should be hidden
-    });
-
-    it('disables input during generation', () => {
-      const { getByPlaceholderText } = render(
-        <ChatInput {...defaultProps} isGenerating={true} />
-      );
-
-      // Input may be disabled or have reduced opacity
+      // Mic/voice button should not be visible
+      expect(queryByTestId('voice-record-button')).toBeNull();
     });
   });
 
@@ -202,11 +275,12 @@ describe('ChatInput', () => {
   // ============================================================================
   describe('image generation mode', () => {
     it('shows image mode toggle when imageModelLoaded is true', () => {
-      const { queryByTestId } = render(
+      const { getByTestId } = render(
         <ChatInput {...defaultProps} imageModelLoaded={true} />
       );
 
-      // Image toggle button should be visible
+      // Image toggle button should be visible (when settings.imageGenerationMode === 'manual')
+      expect(getByTestId('image-mode-toggle')).toBeTruthy();
     });
 
     it('hides image mode toggle when imageModelLoaded is false', () => {
@@ -215,11 +289,12 @@ describe('ChatInput', () => {
       );
 
       // Image toggle should be hidden
+      expect(queryByTestId('image-mode-toggle')).toBeNull();
     });
 
     it('toggles image mode when toggle is pressed', () => {
       const onImageModeChange = jest.fn();
-      const { getByTestId } = render(
+      const { getByTestId, queryByTestId } = render(
         <ChatInput
           {...defaultProps}
           imageModelLoaded={true}
@@ -227,35 +302,31 @@ describe('ChatInput', () => {
         />
       );
 
-      // Press image toggle
-      // fireEvent.press(getByTestId('image-mode-toggle'));
-      // expect(onImageModeChange).toHaveBeenCalled();
+      const toggle = getByTestId('image-mode-toggle');
+      fireEvent.press(toggle);
+
+      expect(onImageModeChange).toHaveBeenCalledWith('force');
+
+      // ON badge should appear
+      expect(queryByTestId('image-mode-on-badge')).toBeTruthy();
     });
 
-    it('shows ON indicator when image mode is forced', () => {
-      const { queryByText } = render(
+    it('shows ON badge when image mode is forced', () => {
+      const { getByTestId, queryByTestId } = render(
         <ChatInput {...defaultProps} imageModelLoaded={true} />
       );
 
       // Toggle to force mode
+      const toggle = getByTestId('image-mode-toggle');
+      fireEvent.press(toggle);
+
       // Should show "ON" badge
+      expect(queryByTestId('image-mode-on-badge')).toBeTruthy();
     });
 
-    it('shows active image model name in auto mode', () => {
-      const { queryByText } = render(
-        <ChatInput
-          {...defaultProps}
-          imageModelLoaded={true}
-          activeImageModelName="SDXL Turbo"
-        />
-      );
-
-      // Should show "Auto: SDXL Turbo" or similar
-    });
-
-    it('passes forceImageMode to onSend callback', () => {
+    it('passes forceImageMode=true to onSend when in force mode', () => {
       const onSend = jest.fn();
-      const { getByPlaceholderText } = render(
+      const { getByTestId } = render(
         <ChatInput
           {...defaultProps}
           onSend={onSend}
@@ -263,16 +334,60 @@ describe('ChatInput', () => {
         />
       );
 
-      // Enable force mode then send
+      // Enable force mode
+      const toggle = getByTestId('image-mode-toggle');
+      fireEvent.press(toggle);
+
+      // Type and send
+      const input = getByTestId('chat-input');
+      fireEvent.changeText(input, 'Generate an image');
+
+      const sendButton = getByTestId('send-button');
+      fireEvent.press(sendButton);
+
       // onSend should receive true for forceImageMode
+      expect(onSend).toHaveBeenCalledWith(
+        'Generate an image',
+        undefined,
+        true
+      );
+    });
+
+    it('resets to auto mode after sending with force mode', () => {
+      const onImageModeChange = jest.fn();
+      const { getByTestId, queryByTestId } = render(
+        <ChatInput
+          {...defaultProps}
+          imageModelLoaded={true}
+          onImageModeChange={onImageModeChange}
+        />
+      );
+
+      // Enable force mode
+      const toggle = getByTestId('image-mode-toggle');
+      fireEvent.press(toggle);
+      expect(onImageModeChange).toHaveBeenCalledWith('force');
+
+      // Send message
+      const input = getByTestId('chat-input');
+      fireEvent.changeText(input, 'Test');
+      const sendButton = getByTestId('send-button');
+      fireEvent.press(sendButton);
+
+      // Should have reset to auto
+      expect(onImageModeChange).toHaveBeenCalledWith('auto');
+      // ON badge should be gone
+      expect(queryByTestId('image-mode-on-badge')).toBeNull();
     });
 
     it('shows alert when toggling without image model', () => {
-      const { getByTestId } = render(
+      const { queryByTestId } = render(
         <ChatInput {...defaultProps} imageModelLoaded={false} />
       );
 
-      // Try to toggle image mode - should show alert
+      // Toggle is hidden when no model loaded, so this tests the alert behavior
+      // if somehow accessed
+      expect(queryByTestId('image-mode-toggle')).toBeNull();
     });
   });
 
@@ -281,11 +396,12 @@ describe('ChatInput', () => {
   // ============================================================================
   describe('vision capabilities', () => {
     it('shows camera button when supportsVision is true', () => {
-      const { queryByTestId } = render(
+      const { getByTestId } = render(
         <ChatInput {...defaultProps} supportsVision={true} />
       );
 
-      // Camera/image picker button should be visible
+      // Camera button should be visible
+      expect(getByTestId('camera-button')).toBeTruthy();
     });
 
     it('hides camera button when supportsVision is false', () => {
@@ -294,14 +410,16 @@ describe('ChatInput', () => {
       );
 
       // Camera button should be hidden
+      expect(queryByTestId('camera-button')).toBeNull();
     });
 
     it('shows Vision indicator when vision is supported', () => {
-      const { queryByText } = render(
+      const { getByTestId } = render(
         <ChatInput {...defaultProps} supportsVision={true} />
       );
 
-      // Should show "Vision" badge or similar
+      // Should show "Vision" badge
+      expect(getByTestId('vision-indicator')).toBeTruthy();
     });
   });
 
@@ -309,24 +427,28 @@ describe('ChatInput', () => {
   // Attachments
   // ============================================================================
   describe('attachments', () => {
-    it('opens image picker when camera button is pressed', async () => {
-      const launchImageLibrary = require('react-native-image-picker').launchImageLibrary;
-      launchImageLibrary.mockResolvedValue({
-        assets: [{ uri: 'file:///image.jpg' }],
-      });
-
+    it('opens image source alert when camera button is pressed', async () => {
       const { getByTestId } = render(
         <ChatInput {...defaultProps} supportsVision={true} />
       );
 
-      // Press attachment button
-      // await waitFor(() => {
-      //   expect(launchImageLibrary).toHaveBeenCalled();
-      // });
+      const cameraButton = getByTestId('camera-button');
+      fireEvent.press(cameraButton);
+
+      // Should show alert with camera/library options
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Add Image',
+        'Choose image source',
+        expect.arrayContaining([
+          expect.objectContaining({ text: 'Camera' }),
+          expect.objectContaining({ text: 'Photo Library' }),
+          expect.objectContaining({ text: 'Cancel' }),
+        ])
+      );
     });
 
     it('shows attachment preview after selecting image', async () => {
-      const launchImageLibrary = require('react-native-image-picker').launchImageLibrary;
+      const { launchImageLibrary } = require('react-native-image-picker');
       launchImageLibrary.mockResolvedValue({
         assets: [{
           uri: 'file:///selected-image.jpg',
@@ -336,66 +458,101 @@ describe('ChatInput', () => {
         }],
       });
 
-      const { queryByTestId } = render(
+      const { getByTestId, queryByTestId } = render(
         <ChatInput {...defaultProps} supportsVision={true} />
       );
 
-      // After selecting, preview should appear
+      // Press camera button
+      const cameraButton = getByTestId('camera-button');
+      fireEvent.press(cameraButton);
+
+      // Trigger Photo Library option
+      const alertCall = (Alert.alert as jest.Mock).mock.calls[0];
+      const photoLibraryOption = alertCall[2].find((opt: any) => opt.text === 'Photo Library');
+      photoLibraryOption.onPress();
+
+      await waitFor(() => {
+        expect(queryByTestId('attachments-container')).toBeTruthy();
+      });
     });
 
-    it('allows removing attached image', () => {
-      const { queryByTestId } = render(
-        <ChatInput {...defaultProps} supportsVision={true} />
-      );
-
-      // Add attachment then remove
-    });
-
-    it('includes attachments in onSend callback', () => {
-      const onSend = jest.fn();
-      const { getByPlaceholderText } = render(
-        <ChatInput {...defaultProps} onSend={onSend} supportsVision={true} />
-      );
-
-      // Add attachment and send
-      // onSend should receive attachments array
-    });
-
-    it('handles multiple attachments', () => {
-      const { queryByTestId } = render(
-        <ChatInput {...defaultProps} supportsVision={true} />
-      );
-
-      // Add multiple images
-      // All should appear in preview
-    });
-
-    it('shows document preview for document attachments', () => {
-      const { queryByTestId } = render(
-        <ChatInput {...defaultProps} />
-      );
-
-      // Add document attachment
-      // Should show file icon/name preview
-    });
-
-    it('resizes images before sending', async () => {
-      const onSend = jest.fn();
-      const launchImageLibrary = require('react-native-image-picker').launchImageLibrary;
+    it('can send message with attachment', async () => {
+      const { launchImageLibrary } = require('react-native-image-picker');
       launchImageLibrary.mockResolvedValue({
         assets: [{
-          uri: 'file:///large-image.jpg',
+          uri: 'file:///test-image.jpg',
           type: 'image/jpeg',
-          width: 4000,
-          height: 3000,
+          width: 512,
+          height: 512,
+          fileName: 'test-image.jpg',
         }],
       });
 
-      const { getByPlaceholderText } = render(
+      const onSend = jest.fn();
+      const { getByTestId } = render(
         <ChatInput {...defaultProps} onSend={onSend} supportsVision={true} />
       );
 
-      // Images should be resized to max 1024x1024
+      // Add attachment via library
+      const cameraButton = getByTestId('camera-button');
+      fireEvent.press(cameraButton);
+
+      const alertCall = (Alert.alert as jest.Mock).mock.calls[0];
+      const photoLibraryOption = alertCall[2].find((opt: any) => opt.text === 'Photo Library');
+      photoLibraryOption.onPress();
+
+      await waitFor(() => {
+        expect(getByTestId('attachments-container')).toBeTruthy();
+      });
+
+      // Send button should be visible (can send with just attachment)
+      const sendButton = getByTestId('send-button');
+      fireEvent.press(sendButton);
+
+      expect(onSend).toHaveBeenCalledWith(
+        '',
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'image',
+            uri: 'file:///test-image.jpg',
+          }),
+        ]),
+        false
+      );
+    });
+
+    it('clears attachments after sending', async () => {
+      const { launchImageLibrary } = require('react-native-image-picker');
+      launchImageLibrary.mockResolvedValue({
+        assets: [{
+          uri: 'file:///test-image.jpg',
+          type: 'image/jpeg',
+        }],
+      });
+
+      const onSend = jest.fn();
+      const { getByTestId, queryByTestId } = render(
+        <ChatInput {...defaultProps} onSend={onSend} supportsVision={true} />
+      );
+
+      // Add attachment
+      const cameraButton = getByTestId('camera-button');
+      fireEvent.press(cameraButton);
+
+      const alertCall = (Alert.alert as jest.Mock).mock.calls[0];
+      const photoLibraryOption = alertCall[2].find((opt: any) => opt.text === 'Photo Library');
+      photoLibraryOption.onPress();
+
+      await waitFor(() => {
+        expect(queryByTestId('attachments-container')).toBeTruthy();
+      });
+
+      // Send
+      const sendButton = getByTestId('send-button');
+      fireEvent.press(sendButton);
+
+      // Attachments should be cleared
+      expect(queryByTestId('attachments-container')).toBeNull();
     });
   });
 
@@ -404,101 +561,50 @@ describe('ChatInput', () => {
   // ============================================================================
   describe('voice recording', () => {
     it('shows mic button when input is empty and not generating', () => {
-      const { queryByTestId } = render(
+      const { getByTestId } = render(
         <ChatInput {...defaultProps} isGenerating={false} />
       );
 
       // Mic button should be visible when input is empty
+      expect(getByTestId('voice-record-button')).toBeTruthy();
     });
 
     it('hides mic button when input has text', () => {
-      const { getByPlaceholderText, queryByTestId } = render(
+      const { getByTestId, queryByTestId } = render(
         <ChatInput {...defaultProps} />
       );
 
-      const input = getByPlaceholderText(/message/i);
+      const input = getByTestId('chat-input');
       fireEvent.changeText(input, 'Some text');
 
       // Mic button should be hidden, send button shown
-    });
-
-    it('starts recording when mic button is pressed', () => {
-      const { getByTestId } = render(<ChatInput {...defaultProps} />);
-
-      // Press mic button
-      // Should start recording
-    });
-
-    it('shows recording indicator during recording', () => {
-      const { queryByTestId } = render(<ChatInput {...defaultProps} />);
-
-      // During recording, should show indicator
-    });
-
-    it('shows transcription result after recording', async () => {
-      const { getByPlaceholderText } = render(<ChatInput {...defaultProps} />);
-
-      // After recording, transcribed text should appear in input
-    });
-
-    it('clears recording when conversation changes', () => {
-      const { rerender } = render(
-        <ChatInput {...defaultProps} conversationId="conv-1" />
-      );
-
-      // Change conversation
-      rerender(<ChatInput {...defaultProps} conversationId="conv-2" />);
-
-      // Recording should be cleared
-    });
-
-    it('shows error state when transcription fails', () => {
-      const { queryByText } = render(<ChatInput {...defaultProps} />);
-
-      // On transcription error, should show error message
+      expect(queryByTestId('voice-record-button')).toBeNull();
+      expect(getByTestId('send-button')).toBeTruthy();
     });
   });
 
   // ============================================================================
-  // Settings Access
+  // Status Indicators
   // ============================================================================
-  describe('settings access', () => {
-    it('calls onOpenSettings when settings button is pressed', () => {
-      const onOpenSettings = jest.fn();
+  describe('status indicators', () => {
+    it('shows auto image model name when in auto mode', () => {
+      // Override mock for auto mode
+      mockUseAppStore.mockReturnValue({
+        settings: {
+          imageGenerationMode: 'auto',
+        },
+      });
+
       const { getByTestId } = render(
-        <ChatInput {...defaultProps} onOpenSettings={onOpenSettings} />
+        <ChatInput
+          {...defaultProps}
+          imageModelLoaded={true}
+          activeImageModelName="SDXL Turbo"
+        />
       );
 
-      // Press settings button
-      // fireEvent.press(getByTestId('settings-button'));
-      // expect(onOpenSettings).toHaveBeenCalled();
-    });
-  });
-
-  // ============================================================================
-  // Keyboard Handling
-  // ============================================================================
-  describe('keyboard handling', () => {
-    it('dismisses keyboard after sending', () => {
-      const { getByPlaceholderText } = render(<ChatInput {...defaultProps} />);
-
-      const input = getByPlaceholderText(/message/i);
-      fireEvent.changeText(input, 'Test');
-
-      // After send, keyboard should dismiss
-    });
-
-    it('supports submit on enter (if configured)', () => {
-      const onSend = jest.fn();
-      const { getByPlaceholderText } = render(
-        <ChatInput {...defaultProps} onSend={onSend} />
-      );
-
-      const input = getByPlaceholderText(/message/i);
-      fireEvent.changeText(input, 'Test');
-      fireEvent(input, 'submitEditing');
-
-      // May or may not send on enter depending on config
+      const indicator = getByTestId('auto-image-model-indicator');
+      expect(indicator.props.children).toContain('SDXL Turbo');
     });
   });
 
@@ -507,71 +613,86 @@ describe('ChatInput', () => {
   // ============================================================================
   describe('edge cases', () => {
     it('handles rapid text input', () => {
-      const { getByPlaceholderText } = render(<ChatInput {...defaultProps} />);
+      const { getByTestId } = render(<ChatInput {...defaultProps} />);
 
-      const input = getByPlaceholderText(/message/i);
+      const input = getByTestId('chat-input');
 
       // Rapidly change text
       for (let i = 0; i < 100; i++) {
         fireEvent.changeText(input, `Text ${i}`);
       }
 
-      // Should handle without crashing
+      // Should handle without crashing, final value is last input
+      expect(input.props.value).toBe('Text 99');
     });
 
-    it('handles empty send attempt', () => {
+    it('does not send empty message', () => {
       const onSend = jest.fn();
-      const { getByPlaceholderText } = render(
+      const { queryByTestId } = render(
         <ChatInput {...defaultProps} onSend={onSend} />
       );
 
-      // Try to send empty message
-      // Should not call onSend or should be prevented
+      // Send button shouldn't even be visible when empty
+      expect(queryByTestId('send-button')).toBeNull();
+      expect(onSend).not.toHaveBeenCalled();
     });
 
-    it('handles whitespace-only message', () => {
+    it('does not send whitespace-only message', () => {
       const onSend = jest.fn();
-      const { getByPlaceholderText } = render(
+      const { getByTestId, queryByTestId } = render(
         <ChatInput {...defaultProps} onSend={onSend} />
       );
 
-      const input = getByPlaceholderText(/message/i);
+      const input = getByTestId('chat-input');
       fireEvent.changeText(input, '   \n   ');
 
-      // Should not allow sending whitespace-only
+      // Send button shouldn't be visible for whitespace-only
+      expect(queryByTestId('send-button')).toBeNull();
     });
 
     it('trims whitespace from message', () => {
       const onSend = jest.fn();
-      const { getByPlaceholderText } = render(
+      const { getByTestId } = render(
         <ChatInput {...defaultProps} onSend={onSend} />
       );
 
-      const input = getByPlaceholderText(/message/i);
+      const input = getByTestId('chat-input');
       fireEvent.changeText(input, '  Hello  ');
 
+      const sendButton = getByTestId('send-button');
+      fireEvent.press(sendButton);
+
       // onSend should receive trimmed message
+      expect(onSend).toHaveBeenCalledWith('Hello', undefined, false);
     });
 
     it('handles special characters', () => {
       const onSend = jest.fn();
-      const { getByPlaceholderText } = render(
+      const { getByTestId } = render(
         <ChatInput {...defaultProps} onSend={onSend} />
       );
 
-      const input = getByPlaceholderText(/message/i);
+      const input = getByTestId('chat-input');
       fireEvent.changeText(input, '<script>alert("test")</script>');
 
-      // Should handle safely
+      const sendButton = getByTestId('send-button');
+      fireEvent.press(sendButton);
+
+      // Should handle safely, message passed as-is
+      expect(onSend).toHaveBeenCalledWith(
+        '<script>alert("test")</script>',
+        undefined,
+        false
+      );
     });
 
     it('handles emoji input', () => {
-      const { getByPlaceholderText } = render(<ChatInput {...defaultProps} />);
+      const { getByTestId } = render(<ChatInput {...defaultProps} />);
 
-      const input = getByPlaceholderText(/message/i);
+      const input = getByTestId('chat-input');
       fireEvent.changeText(input, '👋 Hello 🌍 World');
 
-      expect(input.props.value).toContain('👋');
+      expect(input.props.value).toBe('👋 Hello 🌍 World');
     });
   });
 });

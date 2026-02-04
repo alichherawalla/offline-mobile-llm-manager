@@ -222,20 +222,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       {/* Attachment Preview */}
       {attachments.length > 0 && (
         <ScrollView
+          testID="attachments-container"
           horizontal
           style={styles.attachmentsContainer}
           contentContainerStyle={styles.attachmentsContent}
           showsHorizontalScrollIndicator={false}
         >
           {attachments.map(attachment => (
-            <View key={attachment.id} style={styles.attachmentPreview}>
+            <View key={attachment.id} testID={`attachment-preview-${attachment.id}`} style={styles.attachmentPreview}>
               {attachment.type === 'image' ? (
                 <Image
+                  testID={`attachment-image-${attachment.id}`}
                   source={{ uri: attachment.uri }}
                   style={styles.attachmentImage}
                 />
               ) : (
-                <View style={styles.documentPreview}>
+                <View testID={`document-preview-${attachment.id}`} style={styles.documentPreview}>
                   <Icon name="file-text" size={24} color={COLORS.primary} />
                   <Text style={styles.documentName} numberOfLines={2}>
                     {attachment.fileName || 'Document'}
@@ -243,6 +245,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 </View>
               )}
               <TouchableOpacity
+                testID={`remove-attachment-${attachment.id}`}
                 style={styles.removeAttachment}
                 onPress={() => removeAttachment(attachment.id)}
               >
@@ -256,6 +259,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       {/* Text Input Row */}
       <View style={styles.inputRow}>
         <TextInput
+          testID="chat-input"
           style={styles.input}
           value={message}
           onChangeText={setMessage}
@@ -274,6 +278,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           {/* Image picker button - only show if vision is supported */}
           {supportsVision && (
             <TouchableOpacity
+              testID="camera-button"
               style={styles.toolbarButton}
               onPress={handlePickImage}
               disabled={disabled || isGenerating}
@@ -286,6 +291,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           {/* Image generation mode toggle - only show in manual mode */}
           {settings.imageGenerationMode === 'manual' && imageModelLoaded && (
             <TouchableOpacity
+              testID="image-mode-toggle"
               style={[
                 styles.imageGenButton,
                 imageMode === 'force' && styles.imageGenButtonForce,
@@ -299,18 +305,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 color={imageMode === 'force' ? COLORS.primary : COLORS.textSecondary}
               />
               {imageMode === 'force' && (
-                <Text style={styles.imageGenLabelForce}>ON</Text>
+                <Text testID="image-mode-on-badge" style={styles.imageGenLabelForce}>ON</Text>
               )}
             </TouchableOpacity>
           )}
 
           {/* Status indicators */}
-          <View style={styles.statusIndicators}>
+          <View testID="status-indicators" style={styles.statusIndicators}>
             {supportsVision && (
-              <Text style={styles.statusText}>Vision</Text>
+              <Text testID="vision-indicator" style={styles.statusText}>Vision</Text>
             )}
             {activeImageModelName && settings.imageGenerationMode === 'auto' && (
-              <Text style={styles.statusText} numberOfLines={1}>
+              <Text testID="auto-image-model-indicator" style={styles.statusText} numberOfLines={1}>
                 Auto: {activeImageModelName}
               </Text>
             )}
@@ -322,6 +328,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           {/* Show stop button when generating */}
           {isGenerating ? (
             <TouchableOpacity
+              testID="stop-button"
               style={[styles.sendButton, styles.stopButton]}
               onPress={handleStop}
             >
@@ -330,6 +337,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           ) : canSend ? (
             /* Show send button when there's content */
             <TouchableOpacity
+              testID="send-button"
               style={styles.sendButton}
               onPress={handleSend}
             >
