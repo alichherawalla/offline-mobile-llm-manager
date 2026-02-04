@@ -215,7 +215,11 @@ export const DownloadManagerScreen: React.FC = () => {
     // Add active background downloads (Android)
     activeDownloads.forEach((download) => {
       const metadata = activeBackgroundDownloads[download.downloadId];
-      if (!metadata) return;
+      // Skip if no metadata or invalid metadata (missing required fields)
+      if (!metadata || !metadata.modelId || !metadata.fileName || !metadata.totalBytes) {
+        console.log('[DownloadManager] Skipping invalid download entry:', download.downloadId, metadata);
+        return;
+      }
 
       // Skip if already tracked via RNFS progress
       const key = `${metadata.modelId}/${metadata.fileName}`;
@@ -227,11 +231,11 @@ export const DownloadManagerScreen: React.FC = () => {
         downloadId: download.downloadId,
         modelId: metadata.modelId,
         fileName: metadata.fileName,
-        author: metadata.author,
-        quantization: metadata.quantization,
+        author: metadata.author || 'Unknown',
+        quantization: metadata.quantization || 'Unknown',
         fileSize: metadata.totalBytes,
-        bytesDownloaded: download.bytesDownloaded,
-        progress: metadata.totalBytes > 0 ? download.bytesDownloaded / metadata.totalBytes : 0,
+        bytesDownloaded: download.bytesDownloaded || 0,
+        progress: metadata.totalBytes > 0 ? (download.bytesDownloaded || 0) / metadata.totalBytes : 0,
         status: download.status,
       });
     });
