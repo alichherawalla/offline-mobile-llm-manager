@@ -1,0 +1,85 @@
+# P0 E2E: App Lifecycle Flow
+# Tests app persistence after kill and reopen
+
+appId: com.localllm
+name: "P0: App Lifecycle"
+tags:
+  - p0
+  - lifecycle
+  - persistence
+---
+
+# Note: This test requires an existing conversation to test persistence
+# Do NOT use clearState here - we're testing that data persists
+# Prerequisites: Text model must be loaded
+- launchApp
+
+# Wait for home screen
+- extendedWaitUntil:
+    visible:
+      id: "home-screen"
+    timeout: 10000
+
+# Wait for new-chat-button (requires model to be loaded)
+- extendedWaitUntil:
+    visible:
+      id: "new-chat-button"
+    timeout: 5000
+
+# Navigate to chat screen
+- tapOn:
+    id: "new-chat-button"
+
+- extendedWaitUntil:
+    visible:
+      id: "chat-screen"
+    timeout: 10000
+
+# Type a unique message
+- tapOn:
+    id: "chat-input"
+
+- inputText: "PERSISTENCE_TEST_12345"
+
+- tapOn:
+    id: "send-button"
+
+# Verify message appears
+- extendedWaitUntil:
+    visible:
+      text: "PERSISTENCE_TEST_12345"
+    timeout: 5000
+
+# Wait for save
+- swipe:
+    direction: DOWN
+    duration: 100
+
+# Kill the app
+- stopApp
+
+# Reopen the app
+- launchApp
+
+# Wait for home screen
+- extendedWaitUntil:
+    visible:
+      id: "home-screen"
+    timeout: 10000
+
+# Navigate to conversations via chats tab
+- tapOn:
+    id: "chats-tab"
+
+- extendedWaitUntil:
+    visible:
+      id: "conversation-list"
+    timeout: 10000
+
+# Open recent conversation
+- tapOn:
+    id: "conversation-item-0"
+
+# Verify message was persisted
+- assertVisible:
+    text: "PERSISTENCE_TEST_12345"

@@ -145,12 +145,12 @@ const MainTabs: React.FC = () => {
       <Tab.Screen
         name="HomeTab"
         component={HomeScreen}
-        options={{ tabBarLabel: 'Home' }}
+        options={{ tabBarLabel: 'Home', tabBarButtonTestID: 'home-tab' }}
       />
       <Tab.Screen
         name="ChatsTab"
         component={ChatsStackNavigator}
-        options={{ tabBarLabel: 'Chats' }}
+        options={{ tabBarLabel: 'Chats', tabBarButtonTestID: 'chats-tab' }}
         listeners={({ navigation }) => ({
           tabPress: (e) => {
             // Reset to ChatsList when tab is pressed
@@ -161,12 +161,12 @@ const MainTabs: React.FC = () => {
       <Tab.Screen
         name="ProjectsTab"
         component={ProjectsStackNavigator}
-        options={{ tabBarLabel: 'Projects' }}
+        options={{ tabBarLabel: 'Projects', tabBarButtonTestID: 'projects-tab' }}
       />
       <Tab.Screen
         name="ModelsTab"
         component={ModelsStackNavigator}
-        options={{ tabBarLabel: 'Models' }}
+        options={{ tabBarLabel: 'Models', tabBarButtonTestID: 'models-tab' }}
         listeners={({ navigation }) => ({
           tabPress: (e) => {
             // Reset to ModelsList when tab is pressed
@@ -177,7 +177,7 @@ const MainTabs: React.FC = () => {
       <Tab.Screen
         name="SettingsTab"
         component={SettingsStackNavigator}
-        options={{ tabBarLabel: 'Settings' }}
+        options={{ tabBarLabel: 'Settings', tabBarButtonTestID: 'settings-tab' }}
         listeners={({ navigation }) => ({
           tabPress: (e) => {
             // Reset to SettingsMain when tab is pressed

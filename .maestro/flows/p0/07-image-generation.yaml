@@ -1,0 +1,57 @@
+# P0 E2E: Image Generation Flow
+# Tests the complete image generation cycle
+# Prerequisites: Text model AND image model must be loaded
+
+appId: com.localllm
+name: "P0: Image Generation"
+tags:
+  - p0
+  - generation
+  - image
+---
+
+- launchApp
+
+# Wait for home screen
+- extendedWaitUntil:
+    visible:
+      id: "home-screen"
+    timeout: 10000
+
+# Wait for new-chat-button (requires model to be loaded)
+- extendedWaitUntil:
+    visible:
+      id: "new-chat-button"
+    timeout: 5000
+
+# Navigate to chat screen
+- tapOn:
+    id: "new-chat-button"
+
+- extendedWaitUntil:
+    visible:
+      id: "chat-screen"
+    timeout: 10000
+
+# Type an image generation prompt
+- tapOn:
+    id: "chat-input"
+
+- inputText: "Draw a picture of a cute cat"
+
+# Send the message
+- tapOn:
+    id: "send-button"
+
+# Wait for image generation to complete (2 min timeout)
+- extendedWaitUntil:
+    visible:
+      id: "generated-image"
+    timeout: 120000
+
+# Verify image can be tapped
+- tapOn:
+    id: "generated-image"
+
+# Close image viewer
+- back

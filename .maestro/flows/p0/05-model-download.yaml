@@ -1,0 +1,60 @@
+# P0 E2E: Model Download Flow
+# Tests downloading a model from the models screen
+
+appId: com.localllm
+name: "P0: Model Download"
+tags:
+  - p0
+  - model
+  - download
+---
+
+- launchApp
+
+# Navigate to Models tab
+- tapOn:
+    text: "Models"
+
+# Wait for models screen
+- extendedWaitUntil:
+    visible:
+      id: "models-screen"
+    timeout: 10000
+
+# Wait for models list to load
+- extendedWaitUntil:
+    visible:
+      id: "models-list"
+    timeout: 15000
+
+# Search for a small test model
+- tapOn:
+    id: "search-input"
+
+- inputText: "SmolLM"
+
+# Wait for search results
+- extendedWaitUntil:
+    visible:
+      id: "model-card-0"
+    timeout: 5000
+
+# Tap on first model in results
+- tapOn:
+    id: "model-card-0"
+
+# Start download
+- tapOn:
+    id: "download-button"
+
+# Verify download progress is shown
+- extendedWaitUntil:
+    visible:
+      id: "download-progress"
+    timeout: 10000
+
+# Wait for download to complete (5 min timeout for small models)
+- extendedWaitUntil:
+    visible:
+      id: "download-complete"
+    timeout: 300000

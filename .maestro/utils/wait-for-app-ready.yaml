@@ -1,0 +1,11 @@
+# Utility: Wait for app to be ready
+# Waits for the main UI to be visible
+
+appId: com.localllm
+---
+
+# Wait for home screen or chat screen to be visible
+- extendedWaitUntil:
+    visible:
+      id: "home-screen"
+    timeout: 10000

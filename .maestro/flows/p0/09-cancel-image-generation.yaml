@@ -1,0 +1,69 @@
+# P0 E2E: Cancel Image Generation Flow
+# Tests canceling an in-progress image generation
+# Prerequisites: Text model AND image model must be loaded
+
+appId: com.localllm
+name: "P0: Cancel Image Generation"
+tags:
+  - p0
+  - generation
+  - image
+  - cancel
+---
+
+- launchApp
+
+# Wait for home screen to be ready
+- extendedWaitUntil:
+    visible:
+      id: "home-screen"
+    timeout: 10000
+
+# Navigate to chat screen (requires model to be loaded)
+- extendedWaitUntil:
+    visible:
+      id: "new-chat-button"
+    timeout: 5000
+
+- tapOn:
+    id: "new-chat-button"
+
+- extendedWaitUntil:
+    visible:
+      id: "chat-screen"
+    timeout: 10000
+
+# Type an image generation prompt
+- tapOn:
+    id: "chat-input"
+
+- inputText: "Create a detailed landscape painting of mountains at sunset"
+
+# Send the message
+- tapOn:
+    id: "send-button"
+
+# Wait for stop button (generation started)
+- extendedWaitUntil:
+    visible:
+      id: "stop-button"
+    timeout: 30000
+
+# Wait a moment for generation to progress
+- swipe:
+    direction: DOWN
+    duration: 100
+
+# Cancel the generation
+- tapOn:
+    id: "stop-button"
+
+# Verify generation stopped
+- extendedWaitUntil:
+    notVisible:
+      id: "stop-button"
+    timeout: 10000
+
+# Verify chat is ready
+- assertVisible:
+    id: "chat-input"

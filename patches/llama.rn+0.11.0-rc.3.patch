@@ -2,10 +2,10 @@ diff --git a/node_modules/llama.rn/android/src/main/java/com/rnllama/RNLlama.jav
 index 8f666dd..970265b 100644
 --- a/node_modules/llama.rn/android/src/main/java/com/rnllama/RNLlama.java
 +++ b/node_modules/llama.rn/android/src/main/java/com/rnllama/RNLlama.java
-@@ -182,26 +182,61 @@
+@@ -182,26 +182,61 @@ public class RNLlama {
      boolean hasDotProd = cpuFeatures.contains("dotprod") || cpuFeatures.contains("asimddp");
      boolean hasI8mm = cpuFeatures.contains("i8mm");
-
+ 
 +    // Many newer Android kernels don't report dotprod/i8mm/fp16 in /proc/cpuinfo
 +    // even though the CPU supports them. Infer from SoC model for known Qualcomm chips.
 +    // All Snapdragon 8-series (SM8xxx) and 7-series (SM7xxx) Gen 1+ have ARMv8.2+
@@ -34,10 +34,9 @@ index 8f666dd..970265b 100644
      String hwInfo = (Build.HARDWARE + " " + Build.MANUFACTURER + " " + Build.MODEL).toLowerCase(Locale.ROOT);
      boolean hasAdreno = Pattern.compile("(adreno|qcom|qualcomm)").matcher(hwInfo).find();
      boolean hasHexagon = isHexagonSupported();
-
--    Log.d(TAG, "CPU features: fp16=" + hasFp16 + " dotprod=" + hasDotProd + " i8mm=" + hasI8mm);
+ 
 +    Log.d(TAG, "CPU features: fp16=" + hasFp16 + " dotprod=" + hasDotProd + " i8mm=" + hasI8mm + " adreno=" + hasAdreno + " hexagon=" + hasHexagon);
-
++
      try {
        boolean jniLoaded = false;
        String loadedLib = "";
@@ -77,10 +76,10 @@ index 8f666dd..970265b 100644
          }
        } else if (isX86_64()) {
          try { System.loadLibrary("rnllama_jni_x86_64"); jniLoaded = true; loadedLib = "rnllama_jni_x86_64"; } catch (UnsatisfiedLinkError ignored) {}
-@@ -215,6 +250,8 @@
+@@ -215,6 +250,8 @@ public class RNLlama {
          loadedLib = "rnllama_jni";
        }
-
+ 
 +      Log.d(TAG, "Loaded native library: " + loadedLib);
 +
        System.loadLibrary("rnllama");

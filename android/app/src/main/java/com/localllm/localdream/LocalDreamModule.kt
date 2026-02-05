@@ -233,85 +233,124 @@ class LocalDreamModule(reactContext: ReactApplicationContext) :
 
                 Log.d(TAG, "Loading model from: $modelPath, backend: $backend")
 
-                val runtimeDir = prepareRuntimeDir()
+                // Try to start the server with selected backend
+                val result = tryStartServer(modelPath, modelDir, backend, isCpu)
 
-                // Look for executable in nativeLibraryDir first (has execute permission),
-                // then fall back to runtime_libs (extracted from assets)
-                val nativeDir = reactApplicationContext.applicationInfo.nativeLibraryDir
-                val nativeDirFile = File(nativeDir, EXECUTABLE_NAME)
-                val runtimeDirFile = File(runtimeDir, EXECUTABLE_NAME)
+                if (result.success) {
+                    promise.resolve(true)
+                    return@launch
+                }
 
-                val executableFile = when {
-                    nativeDirFile.exists() -> {
-                        Log.d(TAG, "Using executable from nativeLibraryDir: ${nativeDirFile.absolutePath}")
-                        nativeDirFile
-                    }
-                    runtimeDirFile.exists() -> {
-                        Log.d(TAG, "Using executable from runtime_libs: ${runtimeDirFile.absolutePath}")
-                        runtimeDirFile.setExecutable(true, true)
-                        runtimeDirFile
-                    }
-                    else -> {
-                        promise.reject("BINARY_NOT_FOUND",
-                            "Executable not found in nativeLibraryDir (${nativeDirFile.absolutePath}) " +
-                            "or runtime_libs (${runtimeDirFile.absolutePath})")
+                // If QNN failed and we have a CPU fallback, try MNN
+                if (backend == "qnn" && cpuModelDir != null) {
+                    Log.w(TAG, "QNN backend failed (${result.error}), falling back to MNN/CPU")
+                    stopServer()
+
+                    val fallbackResult = tryStartServer(modelPath, cpuModelDir, "mnn", true)
+                    if (fallbackResult.success) {
+                        Log.i(TAG, "Successfully fell back to MNN/CPU backend")
+                        promise.resolve(true)
                         return@launch
                     }
-                }
 
-                // Build command based on backend
-                val command = buildCommand(executableFile, modelDir, runtimeDir, isCpu)
-
-                // Build environment
-                val env = buildEnvironment(runtimeDir)
-
-                // Log model directory contents for debugging
-                val modelFiles = modelDir.listFiles()?.map { "${it.name} (${it.length()} bytes)" }?.joinToString(", ")
-                Log.d(TAG, "Model dir contents: [$modelFiles]")
-                Log.d(TAG, "COMMAND: ${command.joinToString(" ")}")
-                Log.d(TAG, "LD_LIBRARY_PATH=${env["LD_LIBRARY_PATH"]}")
-
-                val processBuilder = ProcessBuilder(command).apply {
-                    directory(executableFile.parentFile)
-                    redirectErrorStream(true)
-                    environment().putAll(env)
-                }
-
-                serverProcess = processBuilder.start()
-                currentModelPath = modelPath
-                currentBackend = backend
-                isServerReady = false
-
-                // Start monitoring stdout
-                startMonitor()
-
-                // Wait for server to be ready (poll health endpoint)
-                // Use 180 second timeout - first-time model loads can take a while
-                val ready = waitForServer(180000)
-                if (ready) {
-                    isServerReady = true
-                    Log.i(TAG, "Server is ready on port $SERVER_PORT")
-                    promise.resolve(true)
+                    // Both failed
+                    promise.reject("SERVER_FAILED",
+                        "QNN failed: ${result.error}. MNN fallback also failed: ${fallbackResult.error}")
                 } else {
-                    // Check if process died
-                    val alive = serverProcess?.isAlive == true
-                    val exitCode = if (!alive) try { serverProcess?.exitValue() } catch (_: Exception) { null } else null
-                    stopServer()
-                    if (!alive) {
-                        promise.reject("SERVER_CRASHED",
-                            "Server process exited with code $exitCode before becoming ready. " +
-                            "Check logcat for [server] output.")
-                    } else {
-                        promise.reject("SERVER_TIMEOUT",
-                            "Server failed to start within 3 minutes. " +
-                            "The model may be too large or the device is low on memory.")
-                    }
+                    // No fallback available
+                    promise.reject("SERVER_FAILED", result.error ?: "Server failed to start")
                 }
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading model", e)
                 stopServer()
                 promise.reject("LOAD_ERROR", "Failed to load model: ${e.message}", e)
+            }
+        }
+    }
+
+    private data class StartResult(val success: Boolean, val error: String? = null)
+
+    private suspend fun tryStartServer(
+        modelPath: String,
+        modelDir: File,
+        backend: String,
+        isCpu: Boolean
+    ): StartResult {
+        val runtimeDir = prepareRuntimeDir()
+
+        // Look for executable in nativeLibraryDir first (has execute permission),
+        // then fall back to runtime_libs (extracted from assets)
+        val nativeDir = reactApplicationContext.applicationInfo.nativeLibraryDir
+        val nativeDirFile = File(nativeDir, EXECUTABLE_NAME)
+        val runtimeDirFile = File(runtimeDir, EXECUTABLE_NAME)
+
+        val executableFile = when {
+            nativeDirFile.exists() -> {
+                Log.d(TAG, "Using executable from nativeLibraryDir: ${nativeDirFile.absolutePath}")
+                nativeDirFile
+            }
+            runtimeDirFile.exists() -> {
+                Log.d(TAG, "Using executable from runtime_libs: ${runtimeDirFile.absolutePath}")
+                runtimeDirFile.setExecutable(true, true)
+                runtimeDirFile
+            }
+            else -> {
+                return StartResult(false,
+                    "Executable not found in nativeLibraryDir (${nativeDirFile.absolutePath}) " +
+                    "or runtime_libs (${runtimeDirFile.absolutePath})")
+            }
+        }
+
+        // Build command based on backend
+        val command = buildCommand(executableFile, modelDir, runtimeDir, isCpu)
+
+        // Build environment
+        val env = buildEnvironment(runtimeDir)
+
+        // Log model directory contents for debugging
+        val modelFiles = modelDir.listFiles()?.map { "${it.name} (${it.length()} bytes)" }?.joinToString(", ")
+        Log.d(TAG, "Model dir contents: [$modelFiles]")
+        Log.d(TAG, "COMMAND: ${command.joinToString(" ")}")
+        Log.d(TAG, "LD_LIBRARY_PATH=${env["LD_LIBRARY_PATH"]}")
+
+        val processBuilder = ProcessBuilder(command).apply {
+            directory(executableFile.parentFile)
+            redirectErrorStream(true)
+            environment().putAll(env)
+        }
+
+        serverProcess = processBuilder.start()
+        currentModelPath = modelPath
+        currentBackend = backend
+        isServerReady = false
+
+        // Start monitoring stdout
+        startMonitor()
+
+        // Wait for server to be ready (poll health endpoint)
+        // Use 120s for QNN (first-time cache building can take a while)
+        // Use 180s for MNN (CPU inference setup can be slow)
+        val timeoutMs = if (isCpu) 180000L else 120000L
+        val ready = waitForServer(timeoutMs)
+
+        if (ready) {
+            isServerReady = true
+            Log.i(TAG, "Server is ready on port $SERVER_PORT (backend: $backend)")
+            return StartResult(true)
+        } else {
+            // Check if process died
+            val alive = serverProcess?.isAlive == true
+            val exitCode = if (!alive) try { serverProcess?.exitValue() } catch (_: Exception) { null } else null
+
+            return if (!alive) {
+                StartResult(false,
+                    "Server process exited with code $exitCode before becoming ready. " +
+                    "This may be due to SELinux blocking DSP access (QNN) or missing libraries.")
+            } else {
+                StartResult(false,
+                    "Server failed to start within ${timeoutMs/1000}s. " +
+                    "The model may be too large or the device is low on memory.")
             }
         }
     }
