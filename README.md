@@ -421,7 +421,7 @@ Configure model behavior, image generation, GPU acceleration, and security from 
 
 ### Option 1: Install Pre-built APK
 
-1. Download the APK: **[Latest release (APK)](https://github.com/alichherawalla/offline-mobile-llm-manager/releases/latest)** (~166 MB)
+1. Download the APK from the [`releases/`](releases/) folder: **[app-release.apk](releases/app-release.apk)** (~113 MB)
 2. Transfer to your Android device
 3. Enable "Install from Unknown Sources" in Settings
 4. Install and launch LocalLLM
