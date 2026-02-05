@@ -8,6 +8,9 @@
     "lint": "eslint .",
     "start": "react-native start",
     "test": "jest",
+    "test:e2e": "maestro test .maestro/flows/p0/",
+    "test:e2e:all": "maestro test .maestro/flows/p0/",
+    "test:e2e:single": "maestro test",
     "postinstall": "patch-package"
   },
   "dependencies": {

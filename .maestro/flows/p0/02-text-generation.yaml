@@ -1,0 +1,55 @@
+# P0 E2E: Text Generation Flow
+# Tests the complete text generation cycle
+# Prerequisites: Text model must be loaded
+
+appId: com.localllm
+name: "P0: Text Generation"
+tags:
+  - p0
+  - generation
+  - text
+---
+
+- launchApp
+
+# Wait for home screen
+- extendedWaitUntil:
+    visible:
+      id: "home-screen"
+    timeout: 10000
+
+# Wait for new-chat-button (requires model to be loaded)
+- extendedWaitUntil:
+    visible:
+      id: "new-chat-button"
+    timeout: 5000
+
+# Navigate to chat screen
+- tapOn:
+    id: "new-chat-button"
+
+# Wait for chat screen
+- extendedWaitUntil:
+    visible:
+      id: "chat-screen"
+    timeout: 10000
+
+# Type a test message
+- tapOn:
+    id: "chat-input"
+
+- inputText: "Hello, respond with one word: OK"
+
+# Send the message
+- tapOn:
+    id: "send-button"
+
+# Wait for response (assistant message appears)
+- extendedWaitUntil:
+    visible:
+      id: "assistant-message"
+    timeout: 60000
+
+# Verify input is ready for next message
+- assertVisible:
+    id: "chat-input"

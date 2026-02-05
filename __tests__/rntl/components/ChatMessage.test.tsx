@@ -87,10 +87,13 @@ describe('ChatMessage', () => {
 
     it('renders empty content gracefully', () => {
       const message = createMessage({ content: '' });
-      const { queryByText } = render(<ChatMessage message={message} />);
+      const { queryByText, getByTestId } = render(<ChatMessage message={message} />);
 
-      // Should not crash
+      // Should not crash and should render container
+      expect(getByTestId(`message-container-${message.role}`)).toBeTruthy();
+      // Should not show "undefined" or "null" as text
       expect(queryByText('undefined')).toBeNull();
+      expect(queryByText('null')).toBeNull();
     });
 
     it('renders long content without truncation', () => {
@@ -236,6 +239,38 @@ describe('ChatMessage', () => {
       );
 
       expect(getByTestId('thinking-indicator')).toBeTruthy();
+    });
+
+    it('handles unclosed think tag gracefully', () => {
+      const message = createAssistantMessage('<think>Still thinking about this...');
+
+      // Should not crash
+      const { getByTestId } = render(
+        <ChatMessage message={message} isStreaming={true} />
+      );
+
+      expect(getByTestId('thinking-block')).toBeTruthy();
+    });
+
+    it('handles empty think tags', () => {
+      const message = createAssistantMessage('<think></think>Here is the answer.');
+
+      const { getByText, queryByTestId } = render(<ChatMessage message={message} />);
+
+      // Should show the response
+      expect(getByText(/Here is the answer/)).toBeTruthy();
+      // Empty thinking block may or may not be shown depending on implementation
+    });
+
+    it('handles multiple think tags by using first one', () => {
+      const message = createAssistantMessage(
+        '<think>First thought</think>Response<think>Second thought</think>'
+      );
+
+      const { getByText } = render(<ChatMessage message={message} />);
+
+      // Should show the response between tags
+      expect(getByText(/Response/)).toBeTruthy();
     });
   });
 

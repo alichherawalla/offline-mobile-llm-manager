@@ -144,7 +144,10 @@ describe('ChatStore Streaming Integration', () => {
       const conversation = state.conversations.find(c => c.id === conversationId);
       expect(conversation?.messages).toHaveLength(0);
 
-      // Streaming state should still be cleared
+      // Streaming state IS cleared - this is intentional.
+      // finalize() always ends the streaming session, regardless of whether
+      // the message was saved. The caller is signaling "streaming is done"
+      // and the state should reset to allow new generations.
       expect(state.streamingMessage).toBe('');
     });
 

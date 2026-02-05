@@ -1,0 +1,100 @@
+# P0 E2E: Conversation Management Flow
+# Tests conversation creation and switching
+# Prerequisites: Text model must be loaded
+
+appId: com.localllm
+name: "P0: Conversation Management"
+tags:
+  - p0
+  - conversation
+  - navigation
+---
+
+- launchApp
+
+# Wait for home screen
+- extendedWaitUntil:
+    visible:
+      id: "home-screen"
+    timeout: 10000
+
+# Wait for new-chat-button (requires model to be loaded)
+- extendedWaitUntil:
+    visible:
+      id: "new-chat-button"
+    timeout: 5000
+
+# Create first conversation
+- tapOn:
+    id: "new-chat-button"
+
+- extendedWaitUntil:
+    visible:
+      id: "chat-screen"
+    timeout: 10000
+
+# Send a message in first conversation
+- tapOn:
+    id: "chat-input"
+
+- inputText: "Test message conversation 1"
+
+- tapOn:
+    id: "send-button"
+
+# Wait for message to appear
+- extendedWaitUntil:
+    visible:
+      text: "Test message conversation 1"
+    timeout: 5000
+
+# Go back to home screen to create second conversation
+- tapOn:
+    id: "home-tab"
+
+- extendedWaitUntil:
+    visible:
+      id: "new-chat-button"
+    timeout: 5000
+
+# Create second conversation
+- tapOn:
+    id: "new-chat-button"
+
+- extendedWaitUntil:
+    visible:
+      id: "chat-screen"
+    timeout: 10000
+
+# Send different message
+- tapOn:
+    id: "chat-input"
+
+- inputText: "Test message conversation 2"
+
+- tapOn:
+    id: "send-button"
+
+# Wait for message
+- extendedWaitUntil:
+    visible:
+      text: "Test message conversation 2"
+    timeout: 5000
+
+# Go to chats tab to see conversation list
+- tapOn:
+    id: "chats-tab"
+
+# Wait for list
+- extendedWaitUntil:
+    visible:
+      id: "conversation-list"
+    timeout: 5000
+
+# Switch to first conversation
+- tapOn:
+    id: "conversation-item-0"
+
+# Verify we see conversation 1's message
+- assertVisible:
+    text: "Test message conversation 1"

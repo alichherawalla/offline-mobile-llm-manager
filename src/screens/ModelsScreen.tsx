@@ -992,7 +992,7 @@ export const ModelsScreen: React.FC = () => {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']} testID="models-screen">
       <View style={styles.header}>
         <Text style={styles.title}>Models</Text>
         <TouchableOpacity
@@ -1040,6 +1040,7 @@ export const ModelsScreen: React.FC = () => {
           onChangeText={setSearchQuery}
           onSubmitEditing={handleSearch}
           returnKeyType="search"
+          testID="search-input"
         />
         <Button title="Search" size="small" onPress={handleSearch} />
       </View>
@@ -1136,6 +1137,7 @@ export const ModelsScreen: React.FC = () => {
           renderItem={renderModelItem}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
+          testID="models-list"
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}

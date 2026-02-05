@@ -678,6 +678,84 @@ describe('IntentClassifier', () => {
         );
         expect(result).toBe('image');
       });
+
+      test('text pattern wins when image word is not a command', async () => {
+        // "draw" here is part of explanation request, not a command
+        const result = await intentClassifier.classifyIntent(
+          'explain how artists draw realistic portraits',
+          { useLLM: false }
+        );
+        expect(result).toBe('text');
+      });
+
+      test('code generation is text even if about images', async () => {
+        // "how do I" text pattern should win over "image" word
+        const result = await intentClassifier.classifyIntent(
+          'how do I use Python PIL to resize images',
+          { useLLM: false }
+        );
+        expect(result).toBe('text');
+      });
+
+      test('question about images is text', async () => {
+        const result = await intentClassifier.classifyIntent(
+          'what makes a good photograph composition',
+          { useLLM: false }
+        );
+        expect(result).toBe('text');
+      });
+    });
+
+    describe('Negative tests - should NOT match image patterns', () => {
+      test('drawing as a noun should be text', async () => {
+        const result = await intentClassifier.classifyIntent(
+          'what is the history of drawing as an art form',
+          { useLLM: false }
+        );
+        expect(result).toBe('text');
+      });
+
+      test('picture in context of describing should be text', async () => {
+        // "describe" text pattern should classify as text
+        const result = await intentClassifier.classifyIntent(
+          'describe the picture hanging on the wall',
+          { useLLM: false }
+        );
+        expect(result).toBe('text');
+      });
+
+      test('image in technical context should be text', async () => {
+        const result = await intentClassifier.classifyIntent(
+          'how do I optimize image loading in React',
+          { useLLM: false }
+        );
+        expect(result).toBe('text');
+      });
+
+      test('render in code context should be text', async () => {
+        const result = await intentClassifier.classifyIntent(
+          'how to render a component in React',
+          { useLLM: false }
+        );
+        expect(result).toBe('text');
+      });
+    });
+
+    describe('Empty and edge case inputs', () => {
+      test('empty string should return text', async () => {
+        const result = await intentClassifier.classifyIntent('', { useLLM: false });
+        expect(result).toBe('text');
+      });
+
+      test('whitespace only should return text', async () => {
+        const result = await intentClassifier.classifyIntent('   ', { useLLM: false });
+        expect(result).toBe('text');
+      });
+
+      test('single word with no clear intent should return text', async () => {
+        const result = await intentClassifier.classifyIntent('hello', { useLLM: false });
+        expect(result).toBe('text');
+      });
     });
 
     describe('Case insensitivity', () => {
@@ -736,7 +814,7 @@ describe('IntentClassifier', () => {
       expect(result).toBe('image');
     });
 
-    test('cache key should be truncated for long messages', async () => {
+    test('should handle very long messages without errors', async () => {
       const longMessage = 'draw a ' + 'very '.repeat(100) + 'beautiful landscape';
 
       // Should not throw despite long message

@@ -78,7 +78,7 @@ export const ChatsListScreen: React.FC = () => {
     }
   };
 
-  const renderChat = ({ item }: { item: Conversation }) => {
+  const renderChat = ({ item, index }: { item: Conversation; index: number }) => {
     const project = item.projectId ? getProject(item.projectId) : null;
     const lastMessage = item.messages[item.messages.length - 1];
 
@@ -87,6 +87,7 @@ export const ChatsListScreen: React.FC = () => {
         style={styles.chatItem}
         onPress={() => handleChatPress(item)}
         onLongPress={() => handleDeleteChat(item)}
+        testID={`conversation-item-${index}`}
       >
         <View style={styles.chatIcon}>
           <Icon name="message-circle" size={20} color={COLORS.primary} />
@@ -159,6 +160,7 @@ export const ChatsListScreen: React.FC = () => {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          testID="conversation-list"
         />
       )}
     </SafeAreaView>

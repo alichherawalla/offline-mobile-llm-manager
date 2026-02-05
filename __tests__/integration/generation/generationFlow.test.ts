@@ -371,16 +371,13 @@ describe('Generation Flow Integration', () => {
   });
 
   describe('Generation Lifecycle', () => {
-    it('should prevent concurrent generations', async () => {
+    it('should prevent concurrent generations by returning early', async () => {
       const modelId = setupWithActiveModel();
       const conversationId = setupWithConversation({ modelId });
 
-      let completeCallback: (() => void) | null = null;
-
       mockLlmService.generateResponse.mockImplementation(
-        async (_messages, _onStream, onComplete, _onError, _onThinking) => {
-          completeCallback = onComplete!;
-          // Never complete automatically
+        async (_messages, _onStream, _onComplete, _onError, _onThinking) => {
+          // Never complete automatically - simulates ongoing generation
           return new Promise(() => {});
         }
       );
@@ -391,11 +388,21 @@ describe('Generation Flow Integration', () => {
       generationService.generateResponse(conversationId, messages);
       await flushPromises();
 
-      // Try to start second generation
-      await generationService.generateResponse(conversationId, messages);
+      // Verify first generation is running
+      expect(generationService.getState().isGenerating).toBe(true);
+
+      // Try to start second generation - should return immediately without error
+      const secondResult = await generationService.generateResponse(conversationId, messages);
+
+      // Second call should resolve with undefined (silent no-op)
+      expect(secondResult).toBeUndefined();
 
       // llmService.generateResponse should only be called once
       expect(mockLlmService.generateResponse).toHaveBeenCalledTimes(1);
+
+      // First generation should still be running unaffected
+      expect(generationService.getState().isGenerating).toBe(true);
+      expect(generationService.getState().conversationId).toBe(conversationId);
     });
 
     it('should throw if no model is loaded', async () => {

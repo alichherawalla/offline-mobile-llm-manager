@@ -380,13 +380,12 @@ describe('ChatInput', () => {
       expect(queryByTestId('image-mode-on-badge')).toBeNull();
     });
 
-    it('shows alert when toggling without image model', () => {
+    it('hides toggle when no image model is loaded', () => {
       const { queryByTestId } = render(
         <ChatInput {...defaultProps} imageModelLoaded={false} />
       );
 
-      // Toggle is hidden when no model loaded, so this tests the alert behavior
-      // if somehow accessed
+      // Toggle is hidden when no model loaded
       expect(queryByTestId('image-mode-toggle')).toBeNull();
     });
   });
