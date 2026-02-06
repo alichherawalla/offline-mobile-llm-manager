@@ -1,0 +1,25 @@
+# Maestro E2E Test Configuration
+# https://maestro.mobile.dev/
+
+# App configuration
+appId: com.localllm
+
+# Flow defaults
+flows:
+  # Default timeout for all commands (ms)
+  timeout: 30000
+  # Screenshot on failure
+  screenshotOnFailure: true
+
+# Environment variables
+env:
+  # Test model name (small model for faster tests)
+  TEST_TEXT_MODEL: "SmolLM2-135M-Instruct-Q4_K_M"
+  TEST_IMAGE_MODEL: "lcm-sdxl-q4f16"
+  # Timeouts
+  MODEL_LOAD_TIMEOUT: 60000
+  GENERATION_TIMEOUT: 120000
+  DOWNLOAD_TIMEOUT: 300000
+
+# Device configuration
+# Can be overridden via CLI: maestro test --device <deviceId>

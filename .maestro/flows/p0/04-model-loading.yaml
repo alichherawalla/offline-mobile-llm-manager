@@ -1,0 +1,51 @@
+# P0 E2E: Model Loading Flow
+# Tests loading and unloading a text model
+
+appId: com.localllm
+name: "P0: Model Loading"
+tags:
+  - p0
+  - model
+  - loading
+---
+
+- launchApp
+
+# Wait for home screen
+- extendedWaitUntil:
+    visible:
+      id: "home-screen"
+    timeout: 10000
+
+# Navigate to chat screen
+- tapOn:
+    id: "new-chat-button"
+
+- extendedWaitUntil:
+    visible:
+      id: "chat-screen"
+    timeout: 10000
+
+# Open model selector
+- tapOn:
+    id: "model-selector"
+
+# Wait for model list
+- extendedWaitUntil:
+    visible:
+      id: "model-list"
+    timeout: 5000
+
+# Select first available model
+- tapOn:
+    id: "model-item-0"
+
+# Wait for model to load (loading indicator disappears)
+- extendedWaitUntil:
+    notVisible:
+      id: "model-loading-indicator"
+    timeout: 60000
+
+# Verify chat input is enabled
+- assertVisible:
+    id: "chat-input"

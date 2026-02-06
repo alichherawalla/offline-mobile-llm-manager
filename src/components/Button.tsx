@@ -19,6 +19,7 @@ interface ButtonProps {
   icon?: React.ReactNode;
   style?: ViewStyle;
   textStyle?: TextStyle;
+  testID?: string;
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -31,6 +32,7 @@ export const Button: React.FC<ButtonProps> = ({
   icon,
   style,
   textStyle,
+  testID,
 }) => {
   const buttonStyles = [
     styles.button,
@@ -54,6 +56,7 @@ export const Button: React.FC<ButtonProps> = ({
       onPress={onPress}
       disabled={disabled || loading}
       activeOpacity={0.7}
+      testID={testID}
     >
       {loading ? (
         <ActivityIndicator

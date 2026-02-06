@@ -1029,7 +1029,7 @@ export const ChatScreen: React.FC = () => {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']} testID="chat-screen">
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -1045,8 +1045,9 @@ export const ChatScreen: React.FC = () => {
               <TouchableOpacity
                 style={styles.modelSelector}
                 onPress={() => setShowModelSelector(true)}
+                testID="model-selector"
               >
-                <Text style={styles.headerSubtitle} numberOfLines={1}>
+                <Text style={styles.headerSubtitle} numberOfLines={1} testID="model-loaded-indicator">
                   {activeModel.name}
                 </Text>
                 <Text style={styles.modelSelectorArrow}>▼</Text>

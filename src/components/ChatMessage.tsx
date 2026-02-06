@@ -212,7 +212,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   return (
     <>
       <TouchableOpacity
-        testID={`message-container-${message.role}`}
+        testID={isUser ? 'user-message' : 'assistant-message'}
         style={[
           styles.container,
           isUser ? styles.userContainer : styles.assistantContainer,
@@ -234,13 +234,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
               {message.attachments!.map((attachment, index) => (
                 <TouchableOpacity
                   key={attachment.id}
-                  testID={`message-attachment-${index}`}
+                  testID={isUser ? `message-attachment-${index}` : `generated-image`}
                   style={styles.attachmentWrapper}
                   onPress={() => onImagePress?.(attachment.uri)}
                   activeOpacity={0.8}
                 >
                   <Image
-                    testID={`message-image-${index}`}
+                    testID={isUser ? `message-image-${index}` : `generated-image-content`}
                     source={{ uri: attachment.uri }}
                     style={styles.attachmentImage}
                     resizeMode="cover"

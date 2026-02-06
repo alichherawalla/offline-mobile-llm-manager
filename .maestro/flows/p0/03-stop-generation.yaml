@@ -1,0 +1,69 @@
+# P0 E2E: Stop Generation Flow
+# Tests stopping an in-progress generation
+# Prerequisites: Text model must be loaded
+
+appId: com.localllm
+name: "P0: Stop Generation"
+tags:
+  - p0
+  - generation
+  - stop
+---
+
+- launchApp
+
+# Wait for home screen
+- extendedWaitUntil:
+    visible:
+      id: "home-screen"
+    timeout: 10000
+
+# Wait for new-chat-button (requires model to be loaded)
+- extendedWaitUntil:
+    visible:
+      id: "new-chat-button"
+    timeout: 5000
+
+# Navigate to chat screen
+- tapOn:
+    id: "new-chat-button"
+
+- extendedWaitUntil:
+    visible:
+      id: "chat-screen"
+    timeout: 10000
+
+# Type a message that will generate a long response
+- tapOn:
+    id: "chat-input"
+
+- inputText: "Write a detailed essay about the history of artificial intelligence"
+
+# Send the message
+- tapOn:
+    id: "send-button"
+
+# Wait for stop button to appear (generation started)
+- extendedWaitUntil:
+    visible:
+      id: "stop-button"
+    timeout: 30000
+
+# Wait a moment for some tokens to stream
+- swipe:
+    direction: DOWN
+    duration: 100
+
+# Tap stop button
+- tapOn:
+    id: "stop-button"
+
+# Verify stop button disappears
+- extendedWaitUntil:
+    notVisible:
+      id: "stop-button"
+    timeout: 10000
+
+# Verify input is ready
+- assertVisible:
+    id: "chat-input"

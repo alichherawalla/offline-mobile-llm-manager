@@ -337,7 +337,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const recentConversations = conversations.slice(0, 4);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']} testID="home-screen">
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <Text style={styles.title}>Local LLM</Text>
@@ -492,6 +492,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             title="New Chat"
             onPress={startNewChat}
             style={styles.newChatButton}
+            testID="new-chat-button"
           />
         ) : (
           <Card style={styles.setupCard}>
@@ -530,11 +531,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Recent</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('ChatsTab')}>
+              <TouchableOpacity onPress={() => navigation.navigate('ChatsTab')} testID="conversation-list-button">
                 <Text style={styles.seeAll}>See all</Text>
               </TouchableOpacity>
             </View>
-            {recentConversations.map((conv) => (
+            {recentConversations.map((conv, index) => (
               <Swipeable
                 key={conv.id}
                 renderRightActions={() => renderRightActions(conv)}
@@ -543,6 +544,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 <TouchableOpacity
                   style={styles.conversationItem}
                   onPress={() => continueChat(conv.id)}
+                  testID={`conversation-item-${index}`}
                 >
                   <View style={styles.conversationInfo}>
                     <Text style={styles.conversationTitle} numberOfLines={1}>
