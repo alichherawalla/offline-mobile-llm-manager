@@ -127,10 +127,10 @@ class ImageGenerationService {
     console.log('[ImageGen] enhanceImagePrompts setting:', settings.enhanceImagePrompts);
 
     if (settings.enhanceImagePrompts) {
-      console.log('[ImageGen] Starting prompt enhancement...');
-
-      // Check if text model is loaded
       const isTextModelLoaded = llmService.isModelLoaded();
+      const isLlmGenerating = llmService.isCurrentlyGenerating();
+      console.log('[ImageGen] 🎨 Starting prompt enhancement - Model loaded:', isTextModelLoaded, 'LLM generating:', isLlmGenerating);
+
       if (!isTextModelLoaded) {
         console.warn('[ImageGen] No text model loaded, skipping enhancement');
 
@@ -184,6 +184,7 @@ class ImageGenerationService {
         ];
 
         let fullResponse = '';
+        console.log('[ImageGen] 📤 Calling llmService.generateResponse for enhancement...');
         enhancedPrompt = await llmService.generateResponse(
           enhancementMessages,
           (token) => {
@@ -193,15 +194,32 @@ class ImageGenerationService {
             fullResponse = complete;
           },
           (error) => {
-            console.error('[ImageGen] Enhancement error:', error);
+            console.error('[ImageGen] ❌ Enhancement error callback:', error);
           }
         );
+        console.log('[ImageGen] 📥 llmService.generateResponse returned, checking state...');
+        console.log('[ImageGen] LLM state after enhancement - generating:', llmService.isCurrentlyGenerating());
 
           // Clean up the response - remove quotes, extra whitespace
           enhancedPrompt = enhancedPrompt.trim().replace(/^["']|["']$/g, '');
 
           console.log('[ImageGen] ✅ Original prompt:', params.prompt);
           console.log('[ImageGen] ✅ Enhanced prompt:', enhancedPrompt);
+
+          // CRITICAL: Reset LLM service after enhancement
+          // This ensures it's ready for normal text generation later
+          console.log('[ImageGen] 🔄 Starting cleanup - generating:', llmService.isCurrentlyGenerating());
+          try {
+            // Always call stop to ensure clean state
+            await llmService.stopGeneration();
+            console.log('[ImageGen] ✓ stopGeneration() called');
+            // NOTE: We DON'T clear KV cache here because:
+            // 1. It's already cleared during generation completion
+            // 2. Clearing it slows down subsequent vision inference significantly
+            console.log('[ImageGen] ✅ LLM service reset complete - generating:', llmService.isCurrentlyGenerating());
+          } catch (resetError) {
+            console.error('[ImageGen] ❌ Failed to reset LLM service:', resetError);
+          }
 
           // Update thinking message with enhanced prompt
           if (params.conversationId && tempMessageId) {
@@ -223,6 +241,16 @@ class ImageGenerationService {
         } catch (error: any) {
           console.error('[ImageGen] ❌ Prompt enhancement failed:', error);
           console.error('[ImageGen] Error details:', error?.message || 'Unknown error');
+
+          // CRITICAL: Reset LLM service after error
+          console.log('[ImageGen] 🔄 Starting cleanup after error - generating:', llmService.isCurrentlyGenerating());
+          try {
+            await llmService.stopGeneration();
+            console.log('[ImageGen] ✓ stopGeneration() called after error');
+            console.log('[ImageGen] ✅ LLM service reset after error - generating:', llmService.isCurrentlyGenerating());
+          } catch (resetError) {
+            console.error('[ImageGen] ❌ Failed to reset LLM service after error:', resetError);
+          }
 
           // Update or remove the thinking message on error
           if (params.conversationId && tempMessageId) {

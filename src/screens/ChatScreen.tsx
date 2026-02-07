@@ -1490,6 +1490,7 @@ const styles = StyleSheet.create({
   },
   keyboardView: {
     flex: 1,
+    paddingBottom: 16,
   },
   header: {
     paddingHorizontal: 16,
