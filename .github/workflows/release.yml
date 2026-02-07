@@ -1,0 +1,100 @@
+name: Build and Release Android
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0  # Fetch all history for changelog
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Bump patch version
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          npm version patch --no-git-tag-version
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+
+          # Update Android versionCode and versionName
+          VERSION_CODE=$(date +%s)
+          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
+
+          # Update build.gradle
+          sed -i "s/versionCode .*/versionCode $VERSION_CODE/" android/app/build.gradle
+          sed -i "s/versionName .*/versionName \"$NEW_VERSION\"/" android/app/build.gradle
+
+          git add package.json package-lock.json android/app/build.gradle
+          git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
+          git push
+
+      - name: Generate release notes
+        run: |
+          # Get commits since last tag (or all commits if no tags)
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LAST_TAG" ]; then
+            COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges -20)
+          else
+            COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          fi
+
+          # Write release notes
+          echo "## What's Changed" > release-notes.md
+          echo "" >> release-notes.md
+          echo "$COMMITS" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${LAST_TAG:-v0.0.0}...v${{ env.NEW_VERSION }}" >> release-notes.md
+
+          cat release-notes.md
+
+      - name: Build Android Release APK
+        run: |
+          cd android
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Rename APK
+        run: |
+          mv android/app/build/outputs/apk/release/app-release.apk \
+             android/app/build/outputs/apk/release/LocalLLM-v${{ env.NEW_VERSION }}.apk
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create v${{ env.NEW_VERSION }} \
+            android/app/build/outputs/apk/release/LocalLLM-v${{ env.NEW_VERSION }}.apk \
+            --title "LocalLLM v${{ env.NEW_VERSION }}" \
+            --notes-file release-notes.md
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalLLM-v${{ env.NEW_VERSION }}
+          path: android/app/build/outputs/apk/release/LocalLLM-v${{ env.NEW_VERSION }}.apk
+          if-no-files-found: error
