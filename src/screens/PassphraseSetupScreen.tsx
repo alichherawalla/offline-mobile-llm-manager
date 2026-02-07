@@ -10,9 +10,10 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Icon from 'react-native-vector-icons/Feather';
 import { Button, Card } from '../components';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
-import { COLORS, TYPOGRAPHY, FONTS } from '../constants';
+import { COLORS, TYPOGRAPHY, FONTS, SPACING } from '../constants';
 import { authService } from '../services/authService';
 import { useAuthStore } from '../stores/authStore';
 
@@ -109,7 +110,9 @@ export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
 
         <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
           <View style={styles.iconContainer}>
-            <Text style={styles.icon}>🔐</Text>
+            <View style={styles.iconBox}>
+              <Icon name="lock" size={48} color={COLORS.primary} />
+            </View>
           </View>
 
           <Text style={styles.description}>
@@ -213,60 +216,68 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   title: {
-    ...TYPOGRAPHY.h3,
+    ...TYPOGRAPHY.h2,
     color: COLORS.text,
   },
   content: {
     flex: 1,
   },
   contentContainer: {
-    padding: 16,
+    padding: SPACING.lg,
   },
   iconContainer: {
     alignItems: 'center',
-    marginVertical: 24,
+    marginVertical: SPACING.xl,
   },
-  icon: {
-    ...TYPOGRAPHY.display,
+  iconBox: {
+    width: 96,
+    height: 96,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   description: {
     ...TYPOGRAPHY.body,
     color: COLORS.textSecondary,
     textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24,
+    lineHeight: 20,
+    marginBottom: SPACING.xl,
   },
   inputCard: {
-    marginBottom: 24,
+    marginBottom: SPACING.xl,
   },
   inputGroup: {
-    marginBottom: 16,
+    marginBottom: SPACING.lg,
   },
   inputLabel: {
     ...TYPOGRAPHY.bodySmall,
     color: COLORS.text,
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
   },
   input: {
+    ...TYPOGRAPHY.body,
     backgroundColor: COLORS.surfaceLight,
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: SPACING.md,
     color: COLORS.text,
-    fontFamily: FONTS.mono,
-    fontSize: 14,
   },
   tips: {
-    marginBottom: 24,
+    marginBottom: SPACING.xl,
   },
   tipsTitle: {
     ...TYPOGRAPHY.bodySmall,
     color: COLORS.textSecondary,
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
   },
   tipItem: {
-    ...TYPOGRAPHY.label,
+    ...TYPOGRAPHY.bodySmall,
     color: COLORS.textMuted,
-    lineHeight: 22,
+    lineHeight: 20,
   },
   submitButton: {
     marginBottom: 32,

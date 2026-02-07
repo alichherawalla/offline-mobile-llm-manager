@@ -159,6 +159,70 @@ export const ModelSettingsScreen: React.FC = () => {
               thumbTintColor={COLORS.primary}
             />
           </View>
+
+          {/* Detection Method (only show if auto mode is enabled) */}
+          {rawSettings?.imageGenerationMode === 'auto' && (
+            <View style={styles.settingSection}>
+              <Text style={styles.settingLabel}>Detection Method</Text>
+              <Text style={styles.settingDesc}>
+                {rawSettings?.autoDetectMethod === 'pattern'
+                  ? 'Fast keyword matching'
+                  : 'Uses text model for classification'}
+              </Text>
+              <View style={styles.buttonRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.optionButton,
+                    rawSettings?.autoDetectMethod === 'pattern' && styles.optionButtonActive,
+                  ]}
+                  onPress={() => updateSettings({ autoDetectMethod: 'pattern' })}
+                >
+                  <Text
+                    style={[
+                      styles.optionButtonText,
+                      rawSettings?.autoDetectMethod === 'pattern' && styles.optionButtonTextActive,
+                    ]}
+                  >
+                    Pattern
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.optionButton,
+                    rawSettings?.autoDetectMethod === 'llm' && styles.optionButtonActive,
+                  ]}
+                  onPress={() => updateSettings({ autoDetectMethod: 'llm' })}
+                >
+                  <Text
+                    style={[
+                      styles.optionButtonText,
+                      rawSettings?.autoDetectMethod === 'llm' && styles.optionButtonTextActive,
+                    ]}
+                  >
+                    LLM
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Enhance Image Prompts */}
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleInfo}>
+              <Text style={styles.toggleLabel}>Enhance Image Prompts</Text>
+              <Text style={styles.toggleDesc}>
+                {rawSettings?.enhanceImagePrompts
+                  ? 'Text model refines your prompt before image generation (slower but better results)'
+                  : 'Use your prompt directly for image generation (faster)'}
+              </Text>
+            </View>
+            <Switch
+              value={rawSettings?.enhanceImagePrompts ?? false}
+              onValueChange={(value) => updateSettings({ enhanceImagePrompts: value })}
+              trackColor={{ false: COLORS.surfaceLight, true: COLORS.primary + '80' }}
+              thumbColor={rawSettings?.enhanceImagePrompts ? COLORS.primary : COLORS.textMuted}
+            />
+          </View>
         </Card>
 
         {/* Text Generation Settings */}
@@ -423,7 +487,7 @@ const styles = StyleSheet.create({
     padding: SPACING.xs,
   },
   title: {
-    ...TYPOGRAPHY.h3,
+    ...TYPOGRAPHY.h2,
     flex: 1,
     color: COLORS.text,
   },
@@ -513,10 +577,10 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   sliderDesc: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: COLORS.textMuted,
     marginBottom: SPACING.sm,
-    lineHeight: 16,
+    lineHeight: 18,
   },
   slider: {
     width: '100%',
@@ -546,6 +610,45 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   strategyButtonTextActive: {
+    color: COLORS.primary,
+  },
+  settingSection: {
+    marginTop: SPACING.lg,
+  },
+  settingLabel: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+    marginBottom: SPACING.xs,
+  },
+  settingDesc: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textMuted,
+    marginBottom: SPACING.md,
+    lineHeight: 18,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  optionButton: {
+    flex: 1,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  optionButtonActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: 'transparent',
+  },
+  optionButtonText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
+  },
+  optionButtonTextActive: {
     color: COLORS.primary,
   },
 });

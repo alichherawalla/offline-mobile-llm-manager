@@ -143,8 +143,8 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   subtitle: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.textMuted,
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textSecondary,
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.md,
     paddingBottom: SPACING.sm,
@@ -184,12 +184,12 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.body,
     color: COLORS.text,
     fontWeight: '400',
-    marginBottom: 2,
+    marginBottom: SPACING.xs,
   },
   projectDescription: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.textMuted,
-    marginBottom: 4,
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.xs,
   },
   projectMeta: {
     flexDirection: 'row',
@@ -218,12 +218,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     ...TYPOGRAPHY.h2,
+    color: COLORS.text,
     fontWeight: '400',
     marginBottom: SPACING.sm,
   },
   emptyText: {
     ...TYPOGRAPHY.bodySmall,
-    color: COLORS.textMuted,
+    color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 18,
     marginBottom: SPACING.xl,

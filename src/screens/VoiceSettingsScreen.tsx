@@ -172,9 +172,9 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
   },
   description: {
-    ...TYPOGRAPHY.body,
+    ...TYPOGRAPHY.bodySmall,
     color: COLORS.textSecondary,
-    lineHeight: 20,
+    lineHeight: 18,
     marginBottom: SPACING.lg,
   },
   modelInfo: {
@@ -260,9 +260,9 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   modelOptionDesc: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: COLORS.textMuted,
-    lineHeight: 16,
+    lineHeight: 18,
   },
   error: {
     ...TYPOGRAPHY.bodySmall,

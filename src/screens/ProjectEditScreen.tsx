@@ -191,17 +191,16 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   hint: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.textMuted,
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textSecondary,
     marginBottom: SPACING.sm,
   },
   input: {
+    ...TYPOGRAPHY.body,
     backgroundColor: COLORS.surface,
     borderRadius: 8,
     padding: SPACING.md,
     color: COLORS.text,
-    fontFamily: FONTS.mono,
-    fontSize: 14,
   },
   textArea: {
     minHeight: 180,
@@ -210,7 +209,7 @@ const styles = StyleSheet.create({
   },
   tip: {
     ...TYPOGRAPHY.bodySmall,
-    color: COLORS.textMuted,
+    color: COLORS.textSecondary,
     marginTop: SPACING.md,
     lineHeight: 18,
   },

@@ -121,16 +121,14 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
   },
   sectionTitle: {
-    ...TYPOGRAPHY.label,
-    textTransform: 'uppercase',
-    color: COLORS.textMuted,
+    ...TYPOGRAPHY.h3,
+    color: COLORS.text,
     marginBottom: SPACING.md,
-    letterSpacing: 0.3,
   },
   description: {
-    ...TYPOGRAPHY.body,
+    ...TYPOGRAPHY.bodySmall,
     color: COLORS.textSecondary,
-    lineHeight: 20,
+    lineHeight: 18,
     marginBottom: SPACING.lg,
   },
   infoRow: {

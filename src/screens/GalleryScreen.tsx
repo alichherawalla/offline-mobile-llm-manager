@@ -16,7 +16,7 @@ import RNFS from 'react-native-fs';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
-import { COLORS, TYPOGRAPHY } from '../constants';
+import { COLORS, TYPOGRAPHY, SPACING } from '../constants';
 import { useAppStore, useChatStore } from '../stores';
 import { imageGenerationService, onnxImageGeneratorService } from '../services';
 import type { ImageGenerationState } from '../services';
@@ -512,14 +512,14 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
   closeButton: {
-    padding: 4,
-    marginRight: 12,
+    padding: SPACING.xs,
+    marginRight: SPACING.md,
   },
   title: {
     ...TYPOGRAPHY.h2,
@@ -527,45 +527,45 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   countBadge: {
-    ...TYPOGRAPHY.bodySmall,
+    ...TYPOGRAPHY.meta,
     color: COLORS.textMuted,
-    marginRight: 8,
+    marginRight: SPACING.sm,
   },
   headerButton: {
-    padding: 8,
-    marginLeft: 4,
+    padding: SPACING.sm,
+    marginLeft: SPACING.xs,
   },
   headerButtonDisabled: {
     opacity: 0.5,
   },
   headerButtonText: {
-    ...TYPOGRAPHY.bodySmall,
+    ...TYPOGRAPHY.body,
     color: COLORS.primary,
   },
   // Active generation banner
   genBanner: {
     backgroundColor: COLORS.surface,
-    marginHorizontal: 12,
-    marginTop: 12,
-    borderRadius: 12,
-    padding: 12,
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.md,
+    borderRadius: SPACING.md,
+    padding: SPACING.md,
   },
   genBannerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: SPACING.sm + 2, // 10
   },
   genPreview: {
     width: 40,
     height: 40,
-    borderRadius: 8,
+    borderRadius: SPACING.sm,
     backgroundColor: COLORS.surfaceLight,
   },
   genBannerInfo: {
     flex: 1,
   },
   genBannerTitle: {
-    ...TYPOGRAPHY.label,
+    ...TYPOGRAPHY.body,
     color: COLORS.text,
     marginTop: 0,
   },
@@ -591,7 +591,7 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
   },
   genCancelButton: {
-    padding: 6,
+    padding: SPACING.sm - 2, // 6
   },
   // Grid
   gridContainer: {
@@ -604,7 +604,7 @@ const styles = StyleSheet.create({
   gridItem: {
     width: CELL_SIZE,
     height: CELL_SIZE,
-    borderRadius: 8,
+    borderRadius: SPACING.sm,
     overflow: 'hidden',
     backgroundColor: COLORS.surfaceLight,
   },
@@ -616,7 +616,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'flex-start',
     alignItems: 'flex-end',
-    padding: 6,
+    padding: SPACING.sm - 2, // 6
   },
   selectionOverlaySelected: {
     backgroundColor: 'rgba(99, 102, 241, 0.25)',
@@ -640,18 +640,18 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
+    padding: SPACING.xxl,
   },
   emptyTitle: {
-    ...TYPOGRAPHY.h3,
+    ...TYPOGRAPHY.body,
     color: COLORS.text,
-    marginTop: 16,
+    marginTop: SPACING.lg,
   },
   emptyText: {
     ...TYPOGRAPHY.bodySmall,
     color: COLORS.textMuted,
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: SPACING.sm,
   },
   // Fullscreen viewer
   viewerContainer: {
@@ -677,37 +677,37 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     position: 'absolute',
     bottom: 60,
-    gap: 20,
+    gap: SPACING.lg + 4, // 20
   },
   viewerButton: {
     alignItems: 'center',
-    padding: 14,
+    padding: SPACING.md + 2, // 14
     backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    borderRadius: SPACING.md + 2, // 14
     minWidth: 70,
   },
   viewerButtonText: {
     ...TYPOGRAPHY.meta,
     color: COLORS.text,
-    marginTop: 4,
+    marginTop: SPACING.xs,
   },
   // Details panel
   detailsPanel: {
     position: 'absolute',
     top: 80,
-    left: 16,
-    right: 16,
+    left: SPACING.lg,
+    right: SPACING.lg,
     backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: SPACING.md + 2, // 14
+    padding: SPACING.lg,
   },
   detailsTitle: {
     ...TYPOGRAPHY.h3,
     color: COLORS.text,
-    marginBottom: 12,
+    marginBottom: SPACING.md,
   },
   detailRow: {
-    marginBottom: 10,
+    marginBottom: SPACING.sm + 2, // 10
   },
   detailLabel: {
     ...TYPOGRAPHY.meta,
@@ -715,21 +715,21 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   detailValue: {
-    ...TYPOGRAPHY.bodySmall,
+    ...TYPOGRAPHY.body,
     color: COLORS.text,
     lineHeight: 20,
   },
   detailsMetaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 4,
+    gap: SPACING.sm,
+    marginTop: SPACING.xs,
   },
   detailChip: {
     backgroundColor: COLORS.surfaceLight,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: SPACING.sm + 2, // 10
+    paddingVertical: SPACING.xs,
+    borderRadius: SPACING.sm,
   },
   detailChipText: {
     ...TYPOGRAPHY.meta,
@@ -738,6 +738,6 @@ const styles = StyleSheet.create({
   detailDate: {
     ...TYPOGRAPHY.meta,
     color: COLORS.textMuted,
-    marginTop: 10,
+    marginTop: SPACING.sm + 2, // 10
   },
 });

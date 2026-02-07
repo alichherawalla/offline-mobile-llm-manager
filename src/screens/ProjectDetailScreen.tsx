@@ -274,6 +274,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...TYPOGRAPHY.h2,
+    color: COLORS.text,
     fontWeight: '400',
     flex: 1,
   },
@@ -312,6 +313,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...TYPOGRAPHY.h3,
+    color: COLORS.text,
     fontWeight: '400',
   },
   newChatButton: {
@@ -330,7 +332,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   newChatText: {
-    ...TYPOGRAPHY.bodySmall,
+    ...TYPOGRAPHY.body,
     fontWeight: '400',
     color: COLORS.text,
   },
@@ -366,7 +368,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 2,
+    marginBottom: SPACING.xs,
   },
   chatTitle: {
     ...TYPOGRAPHY.body,
@@ -379,8 +381,8 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
   },
   chatPreview: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.textMuted,
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textSecondary,
   },
   emptyChats: {
     flex: 1,

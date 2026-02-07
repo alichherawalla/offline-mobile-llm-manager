@@ -58,7 +58,6 @@ const MODEL_TYPE_OPTIONS: { key: ModelTypeFilter; label: string }[] = [
   { key: 'text', label: 'Text' },
   { key: 'vision', label: 'Vision' },
   { key: 'code', label: 'Code' },
-  { key: 'image-gen', label: 'Image Gen' },
 ];
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -121,6 +120,7 @@ export const ModelsScreen: React.FC = () => {
     loadInitialModels();
     loadDownloadedModels();
     loadDownloadedImageModels();
+    restoreActiveImageDownloads();
   }, []);
 
   useEffect(() => {
@@ -128,6 +128,38 @@ export const ModelsScreen: React.FC = () => {
       loadHFModels();
     }
   }, [activeTab]);
+
+  // Restore active image model downloads on mount (after app restart)
+  const restoreActiveImageDownloads = async () => {
+    if (!backgroundDownloadService.isAvailable()) return;
+
+    try {
+      const activeDownloads = await modelManager.getActiveBackgroundDownloads();
+
+      // Find image model downloads (modelId starts with "image:")
+      const imageDownload = activeDownloads.find(d =>
+        d.modelId.startsWith('image:') &&
+        (d.status === 'running' || d.status === 'pending' || d.status === 'paused')
+      );
+
+      if (imageDownload) {
+        // Extract the actual model ID (remove "image:" prefix)
+        const modelId = imageDownload.modelId.replace('image:', '');
+        setImageModelDownloading(modelId);
+        setImageModelDownloadId(imageDownload.downloadId);
+
+        // Calculate progress
+        const progress = imageDownload.totalBytes > 0
+          ? imageDownload.bytesDownloaded / imageDownload.totalBytes
+          : 0;
+        setImageModelProgress(progress);
+
+        console.log('[ModelsScreen] Restored image download state:', modelId, `${Math.round(progress * 100)}%`);
+      }
+    } catch (error) {
+      console.warn('[ModelsScreen] Failed to restore image downloads:', error);
+    }
+  };
 
   // Handle system back button when model detail view is shown
   useFocusEffect(
@@ -746,87 +778,90 @@ export const ModelsScreen: React.FC = () => {
   if (selectedModel) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View testID="model-detail-screen" style={{flex: 1}}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => { setSelectedModel(null); setModelFiles([]); }}
-            testID="model-detail-back"
-            style={{ padding: 4, marginRight: 8 }}
-          >
-            <Icon name="arrow-left" size={24} color={COLORS.text} />
-          </TouchableOpacity>
-          <Text style={[styles.title, { flex: 1 }]} numberOfLines={1}>
-            {selectedModel.name}
+        <View testID="model-detail-screen" style={{ flex: 1 }}>
+          <View style={styles.header}>
+            <TouchableOpacity
+              onPress={() => { setSelectedModel(null); setModelFiles([]); }}
+              testID="model-detail-back"
+              style={{ padding: 4, marginRight: 8 }}
+            >
+              <Icon name="arrow-left" size={24} color={COLORS.text} />
+            </TouchableOpacity>
+            <Text style={[styles.title, { flex: 1 }]} numberOfLines={1}>
+              {selectedModel.name}
+            </Text>
+          </View>
+
+          <Card style={styles.modelInfoCard}>
+            <View style={styles.authorRow}>
+              <Text style={styles.modelAuthor}>{selectedModel.author}</Text>
+              {selectedModel.credibility && (
+                <View style={[
+                  styles.credibilityBadge,
+                  { backgroundColor: CREDIBILITY_LABELS[selectedModel.credibility.source].color + '25' }
+                ]}>
+                  {selectedModel.credibility.source === 'lmstudio' && (
+                    <Text style={[styles.credibilityIcon, { color: CREDIBILITY_LABELS[selectedModel.credibility.source].color }]}>★</Text>
+                  )}
+                  {selectedModel.credibility.source === 'official' && (
+                    <Text style={[styles.credibilityIcon, { color: CREDIBILITY_LABELS[selectedModel.credibility.source].color }]}>✓</Text>
+                  )}
+                  {selectedModel.credibility.source === 'verified-quantizer' && (
+                    <Text style={[styles.credibilityIcon, { color: CREDIBILITY_LABELS[selectedModel.credibility.source].color }]}>◆</Text>
+                  )}
+                  <Text style={[styles.credibilityText, { color: CREDIBILITY_LABELS[selectedModel.credibility.source].color }]}>
+                    {CREDIBILITY_LABELS[selectedModel.credibility.source].label}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.modelDescription}>{selectedModel.description}</Text>
+            <View style={styles.modelStats}>
+              <Text style={styles.statText}>
+                {formatNumber(selectedModel.downloads)} downloads
+              </Text>
+              <Text style={styles.statText}>
+                {formatNumber(selectedModel.likes)} likes
+              </Text>
+            </View>
+          </Card>
+
+          <Text style={styles.sectionTitle}>Available Files</Text>
+          <Text style={styles.sectionSubtitle}>
+            Choose a quantization level. Q4_K_M is recommended for mobile.
+            {modelFiles.some(f => f.mmProjFile) && ' Vision files include mmproj.'}
           </Text>
+
+          {isLoadingFiles ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={COLORS.primary} />
+            </View>
+          ) : (
+            <FlatList
+              data={modelFiles}
+              renderItem={renderFileItem}
+              keyExtractor={(item) => item.name}
+              contentContainerStyle={styles.listContent}
+              ListEmptyComponent={
+                <Card style={styles.emptyCard}>
+                  <Text style={styles.emptyText}>
+                    No GGUF files found for this model.
+                  </Text>
+                </Card>
+              }
+            />
+          )}
         </View>
-
-        <Card style={styles.modelInfoCard}>
-          <View style={styles.authorRow}>
-            <Text style={styles.modelAuthor}>{selectedModel.author}</Text>
-            {selectedModel.credibility && (
-              <View style={[
-                styles.credibilityBadge,
-                { backgroundColor: CREDIBILITY_LABELS[selectedModel.credibility.source].color + '25' }
-              ]}>
-                {selectedModel.credibility.source === 'lmstudio' && (
-                  <Text style={[styles.credibilityIcon, { color: CREDIBILITY_LABELS[selectedModel.credibility.source].color }]}>★</Text>
-                )}
-                {selectedModel.credibility.source === 'official' && (
-                  <Text style={[styles.credibilityIcon, { color: CREDIBILITY_LABELS[selectedModel.credibility.source].color }]}>✓</Text>
-                )}
-                {selectedModel.credibility.source === 'verified-quantizer' && (
-                  <Text style={[styles.credibilityIcon, { color: CREDIBILITY_LABELS[selectedModel.credibility.source].color }]}>◆</Text>
-                )}
-                <Text style={[styles.credibilityText, { color: CREDIBILITY_LABELS[selectedModel.credibility.source].color }]}>
-                  {CREDIBILITY_LABELS[selectedModel.credibility.source].label}
-                </Text>
-              </View>
-            )}
-          </View>
-          <Text style={styles.modelDescription}>{selectedModel.description}</Text>
-          <View style={styles.modelStats}>
-            <Text style={styles.statText}>
-              {formatNumber(selectedModel.downloads)} downloads
-            </Text>
-            <Text style={styles.statText}>
-              {formatNumber(selectedModel.likes)} likes
-            </Text>
-          </View>
-        </Card>
-
-        <Text style={styles.sectionTitle}>Available Files</Text>
-        <Text style={styles.sectionSubtitle}>
-          Choose a quantization level. Q4_K_M is recommended for mobile.
-          {modelFiles.some(f => f.mmProjFile) && ' Vision files include mmproj.'}
-        </Text>
-
-        {isLoadingFiles ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
-          </View>
-        ) : (
-          <FlatList
-            data={modelFiles}
-            renderItem={renderFileItem}
-            keyExtractor={(item) => item.name}
-            contentContainerStyle={styles.listContent}
-            ListEmptyComponent={
-              <Card style={styles.emptyCard}>
-                <Text style={styles.emptyText}>
-                  No GGUF files found for this model.
-                </Text>
-              </Card>
-            }
-          />
-        )}
-        </View>
-      <CustomAlert {...alertState} onClose={() => setAlertState(hideAlert())} />
+        <CustomAlert {...alertState} onClose={() => setAlertState(hideAlert())} />
       </SafeAreaView>
     );
   }
 
   // Count of active downloads for badge
   const activeDownloadCount = Object.keys(downloadProgress).length;
+
+  // Total count: downloaded text models + downloaded image models + currently downloading
+  const totalModelCount = downloadedModels.length + downloadedImageModels.length + activeDownloadCount;
 
   const hfModelToDescriptor = (hfModel: HFImageModel): ImageModelDescriptor => ({
     id: hfModel.id,
@@ -991,7 +1026,7 @@ export const ModelsScreen: React.FC = () => {
               onPress={() => handleDownloadImageModel(hfModelToDescriptor(model))}
               disabled={!!imageModelDownloading}
             >
-              <Icon name="download" size={16} color={COLORS.text} />
+              <Icon name="download" size={16} color={COLORS.primary} />
               <Text style={styles.downloadImageButtonText}>Download</Text>
             </TouchableOpacity>
           )}
@@ -1012,182 +1047,182 @@ export const ModelsScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View testID="models-screen" style={{flex: 1}}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Models</Text>
-        <TouchableOpacity
-          style={styles.downloadManagerButton}
-          onPress={() => navigation.navigate('DownloadManager')}
-          testID="downloads-icon"
-        >
-          <Icon name="download" size={22} color={COLORS.text} />
-          {(activeDownloadCount > 0 || downloadedModels.length > 0) && (
-            <View style={styles.downloadBadge}>
-              <Text style={styles.downloadBadgeText}>
-                {activeDownloadCount > 0 ? activeDownloadCount : downloadedModels.length}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
+      <View testID="models-screen" style={{ flex: 1 }}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Models</Text>
+          <TouchableOpacity
+            style={styles.downloadManagerButton}
+            onPress={() => navigation.navigate('DownloadManager')}
+            testID="downloads-icon"
+          >
+            <Icon name="download" size={22} color={COLORS.text} />
+            {totalModelCount > 0 && (
+              <View style={styles.downloadBadge}>
+                <Text style={styles.downloadBadgeText}>
+                  {totalModelCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
 
-      {/* Tab Bar */}
-      <View style={styles.tabBar}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'text' && styles.tabActive]}
-          onPress={() => setActiveTab('text')}
-        >
-          <Icon name="message-square" size={18} color={activeTab === 'text' ? COLORS.primary : COLORS.textSecondary} />
-          <Text style={[styles.tabText, activeTab === 'text' && styles.tabTextActive]}>Text Models</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'image' && styles.tabActive]}
-          onPress={() => setActiveTab('image')}
-        >
-          <Icon name="image" size={18} color={activeTab === 'image' ? COLORS.primary : COLORS.textSecondary} />
-          <Text style={[styles.tabText, activeTab === 'image' && styles.tabTextActive]}>Image Models</Text>
-        </TouchableOpacity>
-      </View>
+        {/* Tab Bar */}
+        <View style={styles.tabBar}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'text' && styles.tabActive]}
+            onPress={() => setActiveTab('text')}
+          >
+            <Icon name="message-square" size={18} color={activeTab === 'text' ? COLORS.primary : COLORS.textSecondary} />
+            <Text style={[styles.tabText, activeTab === 'text' && styles.tabTextActive]}>Text Models</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'image' && styles.tabActive]}
+            onPress={() => setActiveTab('image')}
+          >
+            <Icon name="image" size={18} color={activeTab === 'image' ? COLORS.primary : COLORS.textSecondary} />
+            <Text style={[styles.tabText, activeTab === 'image' && styles.tabTextActive]}>Image Models</Text>
+          </TouchableOpacity>
+        </View>
 
-      {/* Text Models Tab */}
-      {activeTab === 'text' && (
-        <>
-          <View style={styles.searchContainer}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search models..."
-              placeholderTextColor={COLORS.textMuted}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              onSubmitEditing={handleSearch}
-              returnKeyType="search"
-              testID="search-input"
-            />
-            <Button title="Search" size="small" onPress={handleSearch} testID="search-button" />
-          </View>
-
-          {/* Filters Section */}
-          <View style={styles.filtersSection}>
-            {/* Compatible Only Toggle */}
-            <View style={styles.toggleRow}>
-              <Text style={styles.toggleLabel}>Show compatible only</Text>
-              <Switch
-                value={showCompatibleOnly}
-                onValueChange={setShowCompatibleOnly}
-                trackColor={{ false: COLORS.surfaceLight, true: COLORS.primary + '60' }}
-                thumbColor={showCompatibleOnly ? COLORS.primary : COLORS.textMuted}
+        {/* Text Models Tab */}
+        {activeTab === 'text' && (
+          <>
+            <View style={styles.searchContainer}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search models..."
+                placeholderTextColor={COLORS.textMuted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onSubmitEditing={handleSearch}
+                returnKeyType="search"
+                testID="search-input"
               />
+              <Button title="Search" size="small" onPress={handleSearch} testID="search-button" />
             </View>
 
-            {/* Model Type Filter */}
-            <View style={styles.filterContainer}>
-              <Text style={styles.filterSectionLabel}>Type</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.filterScroll}
-              >
-                {MODEL_TYPE_OPTIONS.map((option) => (
-                  <TouchableOpacity
-                    key={option.key}
-                    style={[
-                      styles.filterChip,
-                      modelTypeFilter === option.key && styles.filterChipActive,
-                    ]}
-                    onPress={() => setModelTypeFilter(option.key)}
-                  >
-                    <Text
+            {/* Filters Section */}
+            <View style={styles.filtersSection}>
+              {/* Compatible Only Toggle */}
+              <View style={styles.toggleRow}>
+                <Text style={styles.toggleLabel}>Show compatible only</Text>
+                <Switch
+                  value={showCompatibleOnly}
+                  onValueChange={setShowCompatibleOnly}
+                  trackColor={{ false: COLORS.surfaceLight, true: COLORS.primary + '60' }}
+                  thumbColor={showCompatibleOnly ? COLORS.primary : COLORS.textMuted}
+                />
+              </View>
+
+              {/* Model Type Filter */}
+              <View style={styles.filterContainer}>
+                <Text style={styles.filterSectionLabel}>Type</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.filterScroll}
+                >
+                  {MODEL_TYPE_OPTIONS.map((option) => (
+                    <TouchableOpacity
+                      key={option.key}
                       style={[
-                        styles.filterChipText,
-                        modelTypeFilter === option.key && styles.filterChipTextActive,
+                        styles.filterChip,
+                        modelTypeFilter === option.key && styles.filterChipActive,
                       ]}
+                      onPress={() => setModelTypeFilter(option.key)}
                     >
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          modelTypeFilter === option.key && styles.filterChipTextActive,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
 
-            {/* Credibility Filter */}
-            <View style={styles.filterContainer}>
-              <Text style={styles.filterSectionLabel}>Source</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.filterScroll}
-              >
-                {CREDIBILITY_OPTIONS.map((option) => (
-                  <TouchableOpacity
-                    key={option.key}
-                    style={[
-                      styles.filterChip,
-                      credibilityFilter === option.key && styles.filterChipActive,
-                      credibilityFilter === option.key && option.color && {
-                        backgroundColor: option.color + '25',
-                        borderColor: option.color,
-                      },
-                    ]}
-                    onPress={() => setCredibilityFilter(option.key)}
-                  >
-                    <Text
+              {/* Credibility Filter */}
+              <View style={styles.filterContainer}>
+                <Text style={styles.filterSectionLabel}>Source</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.filterScroll}
+                >
+                  {CREDIBILITY_OPTIONS.map((option) => (
+                    <TouchableOpacity
+                      key={option.key}
                       style={[
-                        styles.filterChipText,
-                        credibilityFilter === option.key && styles.filterChipTextActive,
+                        styles.filterChip,
+                        credibilityFilter === option.key && styles.filterChipActive,
                         credibilityFilter === option.key && option.color && {
-                          color: option.color,
+                          backgroundColor: option.color + '25',
+                          borderColor: option.color,
                         },
                       ]}
+                      onPress={() => setCredibilityFilter(option.key)}
                     >
-                      {option.label}
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          credibilityFilter === option.key && styles.filterChipTextActive,
+                          credibilityFilter === option.key && option.color && {
+                            color: option.color,
+                          },
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+
+            {isLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+                <Text style={styles.loadingText}>Loading models...</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={filteredResults}
+                renderItem={renderModelItem}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={styles.listContent}
+                testID="models-list"
+                refreshControl={
+                  <RefreshControl
+                    refreshing={isRefreshing}
+                    onRefresh={handleRefresh}
+                    tintColor={COLORS.primary}
+                  />
+                }
+                ListEmptyComponent={
+                  <Card style={styles.emptyCard}>
+                    <Text style={styles.emptyText}>
+                      {credibilityFilter !== 'all'
+                        ? `No ${CREDIBILITY_OPTIONS.find((f: { key: CredibilityFilter; label: string }) => f.key === credibilityFilter)?.label} models found. Try a different filter.`
+                        : 'No models found. Try a different search term.'}
                     </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          </View>
+                  </Card>
+                }
+              />
+            )}
+          </>
+        )}
 
-          {isLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={COLORS.primary} />
-              <Text style={styles.loadingText}>Loading models...</Text>
-            </View>
-          ) : (
-            <FlatList
-              data={filteredResults}
-              renderItem={renderModelItem}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.listContent}
-              testID="models-list"
-              refreshControl={
-                <RefreshControl
-                  refreshing={isRefreshing}
-                  onRefresh={handleRefresh}
-                  tintColor={COLORS.primary}
-                />
-              }
-              ListEmptyComponent={
-                <Card style={styles.emptyCard}>
-                  <Text style={styles.emptyText}>
-                    {credibilityFilter !== 'all'
-                      ? `No ${CREDIBILITY_OPTIONS.find((f: { key: CredibilityFilter; label: string }) => f.key === credibilityFilter)?.label} models found. Try a different filter.`
-                      : 'No models found. Try a different search term.'}
-                  </Text>
-                </Card>
-              }
-            />
-          )}
-        </>
-      )}
-
-      {/* Image Models Tab */}
-      {
-        activeTab === 'image' && (
-          <ScrollView style={styles.imageTabContent}>
-            {renderImageModelsSection()}
-          </ScrollView>
-        )
-      }
+        {/* Image Models Tab */}
+        {
+          activeTab === 'image' && (
+            <ScrollView style={styles.imageTabContent}>
+              {renderImageModelsSection()}
+            </ScrollView>
+          )
+        }
       </View>
       <CustomAlert {...alertState} onClose={() => setAlertState(hideAlert())} />
     </SafeAreaView >
@@ -1282,13 +1317,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   searchInput: {
+    ...TYPOGRAPHY.body,
     flex: 1,
     backgroundColor: COLORS.surface,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     color: COLORS.text,
-    ...TYPOGRAPHY.h2,
   },
   filtersSection: {
     marginBottom: 8,
@@ -1347,8 +1382,8 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   loadingText: {
+    ...TYPOGRAPHY.body,
     color: COLORS.textSecondary,
-    ...TYPOGRAPHY.h2,
   },
   listContent: {
     paddingHorizontal: 16,
@@ -1383,7 +1418,7 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.meta,
   },
   modelDescription: {
-    ...TYPOGRAPHY.h2,
+    ...TYPOGRAPHY.body,
     color: COLORS.text,
     marginBottom: 12,
   },
@@ -1499,7 +1534,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.primary,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: COLORS.primary,
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -1507,7 +1544,7 @@ const styles = StyleSheet.create({
   },
   downloadImageButtonText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: COLORS.primary,
   },
   imageDownloadProgress: {
     alignItems: 'center',
@@ -1536,18 +1573,18 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   textModelsSectionTitle: {
-    ...TYPOGRAPHY.h1,
+    ...TYPOGRAPHY.h2,
     color: COLORS.text,
     marginBottom: 12,
     marginTop: 8,
   },
   imageSearchInput: {
+    ...TYPOGRAPHY.body,
     backgroundColor: COLORS.surface,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 10,
     color: COLORS.text,
-    ...TYPOGRAPHY.h2,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: COLORS.border,

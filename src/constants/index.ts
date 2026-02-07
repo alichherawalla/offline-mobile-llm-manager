@@ -242,25 +242,25 @@ export const ONBOARDING_SLIDES = [
     id: 'welcome',
     title: 'Welcome to Local LLM',
     description: 'Run AI models directly on your device. No internet required, complete privacy.',
-    icon: '🤖',
+    icon: 'cpu',
   },
   {
     id: 'privacy',
     title: 'Your Privacy Matters',
     description: 'All conversations stay on your device. No data is sent to any server. Your thoughts remain yours.',
-    icon: '🔒',
+    icon: 'lock',
   },
   {
     id: 'offline',
     title: 'Works Offline',
     description: 'Once you download a model, it works without internet. Perfect for travel, remote areas, or privacy-sensitive tasks.',
-    icon: '📴',
+    icon: 'wifi-off',
   },
   {
     id: 'models',
     title: 'Choose Your Model',
     description: 'Select from various AI models. Smaller models are faster, larger models are smarter. We\'ll help you pick the right one for your device.',
-    icon: '🎯',
+    icon: 'layers',
   },
 ];
 
@@ -351,34 +351,34 @@ export const SPACING = {
 // Colors - Monochromatic palette with emerald accent
 export const COLORS = {
   // Primary accent
-  primary: '#34D399',        // emerald - main accent
-  primaryDark: '#10B981',    // darker emerald
-  primaryLight: '#6EE7B7',   // lighter emerald for subtle highlights
+  primary: '#34D399',
+  primaryDark: '#10B981',
+  primaryLight: '#6EE7B7',
 
   // Backgrounds
-  background: '#0A0A0A',     // pure black base
-  surface: '#141414',        // cards, elevated elements
-  surfaceLight: '#1E1E1E',   // lighter surface for nested elements
-  surfaceHover: '#252525',   // hover state for interactive elements
+  background: '#0A0A0A',
+  surface: '#141414',
+  surfaceLight: '#1E1E1E',
+  surfaceHover: '#252525',
 
   // Text hierarchy
-  text: '#FFFFFF',           // pure white - primary text
-  textSecondary: '#B0B0B0',  // medium gray - secondary text
-  textMuted: '#808080',      // muted gray - tertiary text
-  textDisabled: '#4A4A4A',   // very muted - disabled text
+  text: '#FFFFFF',
+  textSecondary: '#B0B0B0',
+  textMuted: '#808080',
+  textDisabled: '#4A4A4A',
 
   // Borders
-  border: '#1E1E1E',         // default border (same as surfaceLight)
-  borderLight: '#2A2A2A',    // subtle lighter border
-  borderFocus: '#34D399',    // focused/active border (primary)
+  border: '#1E1E1E',
+  borderLight: '#2A2A2A',
+  borderFocus: '#34D399',
 
   // Semantic colors
-  success: '#22C55E',        // green for success states
-  warning: '#F59E0B',        // amber for warnings
-  error: '#EF4444',          // red for errors
-  info: '#3B82F6',           // blue for info
+  success: '#B0B0B0',        // no green — matches textSecondary
+  warning: '#FFFFFF',         // bright white = attention
+  error: '#EF4444',           // only color exception besides primary
+  info: '#B0B0B0',            // no blue — stays monochrome
 
   // Special
-  overlay: 'rgba(0, 0, 0, 0.7)',  // modal/overlay background
-  divider: '#1A1A1A',        // subtle dividers
+  overlay: 'rgba(0, 0, 0, 0.7)',
+  divider: '#1A1A1A',
 };

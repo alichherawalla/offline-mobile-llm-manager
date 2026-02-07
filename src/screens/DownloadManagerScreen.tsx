@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { Card, Button } from '../components';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
-import { COLORS, TYPOGRAPHY } from '../constants';
+import { COLORS, TYPOGRAPHY, SPACING } from '../constants';
 import { useAppStore } from '../stores';
 import { modelManager, backgroundDownloadService, activeModelService, hardwareService } from '../services';
 import { DownloadedModel, BackgroundDownloadInfo, ONNXImageModel } from '../types';
@@ -57,8 +57,8 @@ export const DownloadManagerScreen: React.FC = () => {
   useEffect(() => {
     loadActiveDownloads();
 
-    // Start polling for progress if there are active downloads
-    if (Platform.OS === 'android' && Object.keys(activeBackgroundDownloads).length > 0) {
+    // Always start polling on Android to catch completed/stuck downloads
+    if (Platform.OS === 'android') {
       modelManager.startBackgroundDownloadPolling();
     }
 
@@ -119,10 +119,10 @@ export const DownloadManagerScreen: React.FC = () => {
     setIsRefreshing(false);
   }, []);
 
-  const handleCancelDownload = async (downloadId: number, modelId: string, fileName: string) => {
+  const handleRemoveDownload = async (item: DownloadItem) => {
     setAlertState(showAlert(
-      'Cancel Download',
-      'Are you sure you want to cancel this download?',
+      'Remove Download',
+      'Are you sure you want to remove this download?',
       [
         { text: 'No', style: 'cancel' },
         {
@@ -131,12 +131,23 @@ export const DownloadManagerScreen: React.FC = () => {
           onPress: async () => {
             setAlertState(hideAlert());
             try {
-              await modelManager.cancelBackgroundDownload(downloadId);
-              setDownloadProgress(`${modelId}/${fileName}`, null);
-              setBackgroundDownload(downloadId, null);
-              await loadActiveDownloads();
+              // Clear from progress tracking immediately (optimistic update)
+              const key = `${item.modelId}/${item.fileName}`;
+              setDownloadProgress(key, null);
+
+              // If it has a downloadId, cancel it via native download manager
+              if (item.downloadId) {
+                setBackgroundDownload(item.downloadId, null);
+                await modelManager.cancelBackgroundDownload(item.downloadId);
+              }
+
+              // Wait a bit for native cancellation to complete, then reload
+              // This prevents the polling from re-adding it before cancellation finishes
+              setTimeout(async () => {
+                await loadActiveDownloads();
+              }, 1000);
             } catch (error) {
-              setAlertState(showAlert('Error', 'Failed to cancel download'));
+              setAlertState(showAlert('Error', 'Failed to remove download'));
             }
           },
         },
@@ -202,6 +213,13 @@ export const DownloadManagerScreen: React.FC = () => {
       const [modelId, fileName] = key.split('/').slice(-2);
       const fullModelId = key.substring(0, key.lastIndexOf('/'));
 
+      // Skip invalid entries (undefined, null, or malformed keys)
+      if (!fileName || !fullModelId || fileName === 'undefined' || fullModelId === 'undefined' ||
+          isNaN(progress.totalBytes) || isNaN(progress.bytesDownloaded)) {
+        console.warn('[DownloadManager] Skipping invalid download entry:', key, progress);
+        return;
+      }
+
       items.push({
         type: 'active',
         modelType: 'text',
@@ -225,12 +243,20 @@ export const DownloadManagerScreen: React.FC = () => {
       const key = `${metadata.modelId}/${metadata.fileName}`;
       if (downloadProgress[key]) return;
 
+      // Skip invalid entries
+      if (!metadata.fileName || !metadata.modelId ||
+          metadata.fileName === 'undefined' || metadata.modelId === 'undefined' ||
+          isNaN(metadata.totalBytes) || isNaN(download.bytesDownloaded)) {
+        console.warn('[DownloadManager] Skipping invalid background download:', metadata);
+        return;
+      }
+
       items.push({
         type: 'active',
         modelType: 'text',
         downloadId: download.downloadId,
         modelId: metadata.modelId,
-        fileName: metadata.fileName,
+        fileName: download.title || metadata.fileName,
         author: metadata.author,
         quantization: metadata.quantization,
         fileSize: metadata.totalBytes,
@@ -267,7 +293,7 @@ export const DownloadManagerScreen: React.FC = () => {
         modelId: model.id,
         fileName: model.name,
         author: 'Image Generation',
-        quantization: 'ONNX',
+        quantization: '', // No quantization badge for image models
         fileSize: model.size,
         bytesDownloaded: model.size,
         progress: 1,
@@ -294,14 +320,12 @@ export const DownloadManagerScreen: React.FC = () => {
             {item.author}
           </Text>
         </View>
-        {item.downloadId && (
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={() => handleCancelDownload(item.downloadId!, item.modelId, item.fileName)}
-          >
-            <Icon name="x" size={20} color={COLORS.error} />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={styles.cancelButton}
+          onPress={() => handleRemoveDownload(item)}
+        >
+          <Icon name="x" size={20} color={COLORS.error} />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.progressContainer}>
@@ -322,7 +346,8 @@ export const DownloadManagerScreen: React.FC = () => {
         <Text style={styles.statusText}>
           {item.status === 'running' ? 'Downloading...' :
            item.status === 'pending' ? 'Starting...' :
-           item.status === 'paused' ? 'Paused' : item.status}
+           item.status === 'paused' ? 'Paused' :
+           item.status === 'unknown' ? 'Stuck - Remove & retry' : item.status}
         </Text>
       </View>
     </Card>
@@ -364,11 +389,13 @@ export const DownloadManagerScreen: React.FC = () => {
       </View>
 
       <View style={styles.downloadMeta}>
-        <View style={[styles.quantBadge, item.modelType === 'image' && styles.imageBadge]}>
-          <Text style={[styles.quantText, item.modelType === 'image' && styles.imageQuantText]}>
-            {item.quantization}
-          </Text>
-        </View>
+        {item.quantization && (
+          <View style={[styles.quantBadge, item.modelType === 'image' && styles.imageBadge]}>
+            <Text style={[styles.quantText, item.modelType === 'image' && styles.imageQuantText]}>
+              {item.quantization}
+            </Text>
+          </View>
+        )}
         <Text style={styles.sizeText}>{formatBytes(item.fileSize)}</Text>
         {item.downloadedAt && (
           <Text style={styles.dateText}>
@@ -510,12 +537,12 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
   },
   backButton: {
-    padding: 8,
-    marginRight: 8,
+    padding: SPACING.sm,
+    marginRight: SPACING.sm,
   },
   title: {
     ...TYPOGRAPHY.h2,
@@ -529,17 +556,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    paddingBottom: 32,
+    paddingBottom: SPACING.xxl,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: SPACING.xl,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    gap: 8,
+    paddingHorizontal: SPACING.lg,
+    marginBottom: SPACING.md,
+    gap: SPACING.sm,
   },
   sectionTitle: {
     ...TYPOGRAPHY.h3,
@@ -548,8 +575,8 @@ const styles = StyleSheet.create({
   },
   countBadge: {
     backgroundColor: COLORS.surfaceLight,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: SPACING.sm + 2,
+    paddingVertical: SPACING.xs,
     borderRadius: 12,
   },
   countText: {
@@ -557,13 +584,13 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   downloadCard: {
-    marginHorizontal: 16,
-    marginBottom: 12,
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.md,
   },
   downloadHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: SPACING.md,
   },
   modelTypeIcon: {
     width: 28,
@@ -572,7 +599,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surfaceLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: SPACING.sm + 2,
   },
   downloadInfo: {
     flex: 1,
@@ -580,30 +607,30 @@ const styles = StyleSheet.create({
   fileName: {
     ...TYPOGRAPHY.body,
     color: COLORS.text,
-    marginBottom: 2,
+    marginBottom: SPACING.xs / 2, // 2px - minimal spacing between filename and author
   },
   modelId: {
-    ...TYPOGRAPHY.label,
+    ...TYPOGRAPHY.meta,
     color: COLORS.textSecondary,
   },
   cancelButton: {
-    padding: 8,
-    marginRight: -8,
-    marginTop: -4,
+    padding: SPACING.sm,
+    marginRight: -SPACING.sm,
+    marginTop: -SPACING.xs,
   },
   deleteButton: {
-    padding: 8,
-    marginRight: -8,
-    marginTop: -4,
+    padding: SPACING.sm,
+    marginRight: -SPACING.sm,
+    marginTop: -SPACING.xs,
   },
   progressContainer: {
-    marginBottom: 12,
+    marginBottom: SPACING.md,
   },
   progressBarBackground: {
     height: 6,
     backgroundColor: COLORS.surfaceLight,
     borderRadius: 3,
-    marginBottom: 6,
+    marginBottom: SPACING.xs + 2,
     overflow: 'hidden',
   },
   progressBarFill: {
@@ -618,12 +645,12 @@ const styles = StyleSheet.create({
   downloadMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: SPACING.md,
   },
   quantBadge: {
     backgroundColor: COLORS.primary + '25',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
     borderRadius: 6,
   },
   quantText: {
@@ -649,30 +676,30 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
   },
   emptyCard: {
-    marginHorizontal: 16,
+    marginHorizontal: SPACING.lg,
     alignItems: 'center',
-    paddingVertical: 32,
-    gap: 8,
+    paddingVertical: SPACING.xxl,
+    gap: SPACING.sm,
   },
   emptyText: {
     ...TYPOGRAPHY.body,
     color: COLORS.textSecondary,
-    marginTop: 8,
+    marginTop: SPACING.sm,
   },
   emptySubtext: {
-    ...TYPOGRAPHY.label,
+    ...TYPOGRAPHY.bodySmall,
     color: COLORS.textMuted,
     textAlign: 'center',
   },
   storageSection: {
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACING.lg,
   },
   storageRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: SPACING.sm,
     backgroundColor: COLORS.surface,
-    padding: 16,
+    padding: SPACING.lg,
     borderRadius: 12,
   },
   storageText: {

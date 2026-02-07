@@ -12,7 +12,8 @@ import {
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
-import { Button, Card, CustomAlert, AlertState, initialAlertState, showAlert, hideAlert } from '../components';
+import { Button, Card, CustomAlert, initialAlertState, showAlert, hideAlert } from '../components';
+import type { AlertState } from '../components';
 import { COLORS, FONTS, TYPOGRAPHY, SPACING } from '../constants';
 import { useAppStore, useChatStore } from '../stores';
 import { modelManager, hardwareService, activeModelService, ResourceUsage } from '../services';
@@ -822,7 +823,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   title: {
-    ...TYPOGRAPHY.h1,
+    ...TYPOGRAPHY.h2,
     color: COLORS.text,
   },
   modelsRow: {
@@ -1069,8 +1070,7 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    ...TYPOGRAPHY.h2,
     color: COLORS.text,
   },
   modalScroll: {
@@ -1166,9 +1166,7 @@ const styles = StyleSheet.create({
     maxWidth: 300,
   },
   loadingTitle: {
-    ...TYPOGRAPHY.h1,
-    fontSize: 18,
-    fontWeight: '600',
+    ...TYPOGRAPHY.h2,
     color: COLORS.text,
     marginTop: SPACING.xl,
   },

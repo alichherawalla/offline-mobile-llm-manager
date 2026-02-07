@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   navItemDesc: {
-    ...TYPOGRAPHY.label,
+    ...TYPOGRAPHY.bodySmall,
     color: COLORS.textMuted,
     marginTop: 2,
   },
@@ -225,8 +225,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   privacyTitle: {
-    ...TYPOGRAPHY.h2,
-    fontWeight: '400',
+    ...TYPOGRAPHY.h3,
+    color: COLORS.text,
     marginBottom: SPACING.sm,
   },
   privacyText: {

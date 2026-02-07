@@ -973,7 +973,7 @@ export const ChatScreen: React.FC = () => {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.noModelContainer}>
           <View style={styles.noModelIconContainer}>
-            <Text style={styles.noModelIconText}>AI</Text>
+            <Icon name="cpu" size={32} color={COLORS.textMuted} />
           </View>
           <Text style={styles.noModelTitle}>No Model Selected</Text>
           <Text style={styles.noModelText}>
@@ -1030,12 +1030,7 @@ export const ChatScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View testID="chat-screen" style={{flex: 1}}>
-      <KeyboardAvoidingView
-        style={styles.keyboardView}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      >
+      <View testID="chat-screen" style={styles.keyboardView}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerRow}>
@@ -1094,7 +1089,7 @@ export const ChatScreen: React.FC = () => {
         {displayMessages.length === 0 ? (
           <View style={styles.emptyChat}>
             <View style={styles.emptyChatIconContainer}>
-              <Text style={styles.emptyChatIconText}>Chat</Text>
+              <Icon name="message-square" size={32} color={COLORS.textMuted} />
             </View>
             <Text style={styles.emptyChatTitle}>Start a Conversation</Text>
             <Text style={styles.emptyChatText}>
@@ -1214,7 +1209,6 @@ export const ChatScreen: React.FC = () => {
               : 'Loading model...'
           }
         />
-      </KeyboardAvoidingView>
 
       {/* Project Selector Modal */}
       <Modal
@@ -1517,8 +1511,6 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...TYPOGRAPHY.h2,
-    fontSize: 17,
-    fontWeight: '600',
     color: COLORS.text,
     marginBottom: 2,
   },
@@ -1577,24 +1569,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   emptyChatIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: COLORS.textMuted,
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
-  },
-  emptyChatIconText: {
-    ...TYPOGRAPHY.body,
-    fontWeight: '600',
-    color: COLORS.textMuted,
+    marginBottom: SPACING.lg,
   },
   emptyChatTitle: {
-    ...TYPOGRAPHY.h1,
-    fontSize: 20,
-    fontWeight: '600',
+    ...TYPOGRAPHY.h2,
     color: COLORS.text,
     marginBottom: SPACING.sm,
   },
@@ -1680,16 +1666,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: SPACING.lg,
   },
-  noModelIconText: {
-    ...TYPOGRAPHY.h2,
-    color: COLORS.textMuted,
-  },
   noModelTitle: {
-    ...TYPOGRAPHY.h1,
+    ...TYPOGRAPHY.h2,
     color: COLORS.text,
     marginBottom: SPACING.sm,
   },
@@ -1731,9 +1714,7 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
   },
   projectModalTitle: {
-    ...TYPOGRAPHY.h1,
-    fontSize: 18,
-    fontWeight: '600',
+    ...TYPOGRAPHY.h2,
     color: COLORS.text,
   },
   projectModalClose: {
@@ -1811,9 +1792,7 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
   },
   debugModalTitle: {
-    ...TYPOGRAPHY.h1,
-    fontSize: 18,
-    fontWeight: '600',
+    ...TYPOGRAPHY.h2,
     color: COLORS.text,
   },
   debugModalClose: {
