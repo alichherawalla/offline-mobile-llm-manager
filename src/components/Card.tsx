@@ -15,6 +15,7 @@ interface CardProps {
   onPress?: () => void;
   style?: ViewStyle;
   headerRight?: React.ReactNode;
+  testID?: string;
 }
 
 export const Card: React.FC<CardProps> = ({
@@ -24,6 +25,7 @@ export const Card: React.FC<CardProps> = ({
   onPress,
   style,
   headerRight,
+  testID,
 }) => {
   const Container = onPress ? TouchableOpacity : View;
 
@@ -32,6 +34,7 @@ export const Card: React.FC<CardProps> = ({
       style={[styles.card, style]}
       onPress={onPress}
       activeOpacity={onPress ? 0.7 : 1}
+      testID={testID}
     >
       {(title || subtitle || headerRight) && (
         <View style={styles.header}>

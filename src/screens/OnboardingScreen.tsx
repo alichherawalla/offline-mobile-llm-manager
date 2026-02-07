@@ -93,12 +93,14 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
 
   return (
     <SafeAreaView style={styles.container}>
+      <View testID="onboarding-screen" style={{flex: 1}}>
       <View style={styles.header}>
         {!isLastSlide && (
           <Button
             title="Skip"
             variant="ghost"
             onPress={handleSkip}
+            testID="onboarding-skip"
           />
         )}
       </View>
@@ -129,7 +131,9 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
           onPress={handleNext}
           size="large"
           style={styles.nextButton}
+          testID="onboarding-next"
         />
+      </View>
       </View>
     </SafeAreaView>
   );

@@ -156,7 +156,7 @@ export const ModelDownloadScreen: React.FC<ModelDownloadScreenProps> = ({
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
+        <View testID="model-download-loading" style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>Analyzing your device...</Text>
         </View>
@@ -166,6 +166,7 @@ export const ModelDownloadScreen: React.FC<ModelDownloadScreenProps> = ({
 
   return (
     <SafeAreaView style={styles.container}>
+      <View testID="model-download-screen" style={{flex: 1}}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <Text style={styles.title}>Download Your First Model</Text>
@@ -190,7 +191,7 @@ export const ModelDownloadScreen: React.FC<ModelDownloadScreenProps> = ({
 
         <Text style={styles.sectionTitle}>Recommended Models</Text>
 
-        {recommendedModels.map((model) => {
+        {recommendedModels.map((model, index) => {
           const files = modelFiles[model.id] || [];
           const recommendedFile = files[0]; // First file is usually the recommended one
           const downloadKey = recommendedFile
@@ -202,6 +203,7 @@ export const ModelDownloadScreen: React.FC<ModelDownloadScreenProps> = ({
           return (
             <ModelCard
               key={model.id}
+              testID={`recommended-model-${index}`}
               model={{
                 id: model.id,
                 name: model.name,
@@ -238,7 +240,9 @@ export const ModelDownloadScreen: React.FC<ModelDownloadScreenProps> = ({
           title="Skip for Now"
           variant="ghost"
           onPress={handleSkip}
+          testID="model-download-skip"
         />
+      </View>
       </View>
     </SafeAreaView>
   );

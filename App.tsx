@@ -15,6 +15,9 @@ import { hardwareService, modelManager, authService } from './src/services';
 import { useAppStore, useAuthStore } from './src/stores';
 import { LockScreen } from './src/screens';
 import { useAppState } from './src/hooks/useAppState';
+import { LogBox } from 'react-native';
+
+LogBox.ignoreAllLogs(); // Suppress all logs
 
 function App() {
   const [isInitializing, setIsInitializing] = useState(true);
@@ -115,7 +118,7 @@ function App() {
     return (
       <GestureHandlerRootView style={styles.flex}>
         <SafeAreaProvider>
-          <View style={styles.loadingContainer}>
+          <View style={styles.loadingContainer} testID="app-loading">
             <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
             <ActivityIndicator size="large" color={COLORS.primary} />
           </View>
@@ -127,7 +130,7 @@ function App() {
   // Show lock screen if auth is enabled and app is locked
   if (authEnabled && isLocked) {
     return (
-      <GestureHandlerRootView style={styles.flex}>
+      <GestureHandlerRootView style={styles.flex} testID="app-locked">
         <SafeAreaProvider>
           <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
           <LockScreen onUnlock={handleUnlock} />
@@ -141,38 +144,38 @@ function App() {
       <SafeAreaProvider>
         <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
         <NavigationContainer
-        theme={{
-          dark: true,
-          colors: {
-            primary: COLORS.primary,
-            background: COLORS.background,
-            card: COLORS.surface,
-            text: COLORS.text,
-            border: COLORS.border,
-            notification: COLORS.primary,
-          },
-          fonts: {
-            regular: {
-              fontFamily: 'System',
-              fontWeight: '400',
+          theme={{
+            dark: true,
+            colors: {
+              primary: COLORS.primary,
+              background: COLORS.background,
+              card: COLORS.surface,
+              text: COLORS.text,
+              border: COLORS.border,
+              notification: COLORS.primary,
             },
-            medium: {
-              fontFamily: 'System',
-              fontWeight: '500',
+            fonts: {
+              regular: {
+                fontFamily: 'System',
+                fontWeight: '400',
+              },
+              medium: {
+                fontFamily: 'System',
+                fontWeight: '500',
+              },
+              bold: {
+                fontFamily: 'System',
+                fontWeight: '700',
+              },
+              heavy: {
+                fontFamily: 'System',
+                fontWeight: '900',
+              },
             },
-            bold: {
-              fontFamily: 'System',
-              fontWeight: '700',
-            },
-            heavy: {
-              fontFamily: 'System',
-              fontWeight: '900',
-            },
-          },
-        }}
-      >
-        <AppNavigator />
-      </NavigationContainer>
+          }}
+        >
+          <AppNavigator />
+        </NavigationContainer>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

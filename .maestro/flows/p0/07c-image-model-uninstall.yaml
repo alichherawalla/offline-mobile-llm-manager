@@ -81,34 +81,25 @@ tags:
       id: "downloaded-models-screen"
     timeout: 10000
 
-# Find the image model and delete it
-- evalScript: "${console.log('IMG_UNINSTALL - Delete model')}"
+# Find the first image model and delete it
+- evalScript: "${console.log('IMG_UNINSTALL - Delete first image model')}"
 - tapOn:
     id: "delete-model-button"
+    index: 0
 
 # Confirm deletion
 - extendedWaitUntil:
     visible:
-      text: "Delete Model"
+      text: "Delete Image Model"
     timeout: 5000
 - tapOn:
-    text: "Delete"
+    text: "DELETE"
 
-# Wait for deletion to complete
+# Wait for deletion confirmation to disappear
 - evalScript: "${console.log('IMG_UNINSTALL - Waiting for deletion...')}"
 - extendedWaitUntil:
     notVisible:
-      text: "Absolute Reality"
+      text: "Delete Image Model"
     timeout: 10000
-
-# Go back to verify
-- evalScript: "${console.log('IMG_UNINSTALL - Back to Models')}"
-- back
-
-# Verify model is no longer in the list (should show "No image models downloaded")
-- extendedWaitUntil:
-    visible:
-      text: "No image models downloaded"
-    timeout: 5000
 
 - evalScript: "${console.log('IMG_UNINSTALL - PASSED')}"

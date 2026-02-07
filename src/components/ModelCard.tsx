@@ -22,6 +22,7 @@ interface ModelCardProps {
   downloadProgress?: number;
   isActive?: boolean;
   isCompatible?: boolean;
+  testID?: string;
   onPress?: () => void;
   onDownload?: () => void;
   onDelete?: () => void;
@@ -37,6 +38,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   downloadProgress = 0,
   isActive,
   isCompatible = true,
+  testID,
   onPress,
   onDownload,
   onDelete,
@@ -82,6 +84,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
       onPress={onPress}
       activeOpacity={0.7}
       disabled={!onPress}
+      testID={testID}
     >
       <View style={styles.header}>
         <View style={styles.titleContainer}>
@@ -209,6 +212,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
             style={[styles.actionButton, styles.downloadButton]}
             onPress={onDownload}
             disabled={!isCompatible}
+            testID={testID ? `${testID}-download` : undefined}
           >
             <Text style={styles.actionButtonText}>Download</Text>
           </TouchableOpacity>
