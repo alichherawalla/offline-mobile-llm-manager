@@ -1,17 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Feather';
-import { COLORS } from '../constants';
+import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
+import { COLORS, TYPOGRAPHY, SPACING } from '../constants';
 import { useChatStore, useProjectStore, useAppStore } from '../stores';
 import { onnxImageGeneratorService } from '../services';
 import { Conversation } from '../types';
@@ -24,6 +24,7 @@ export const ChatsListScreen: React.FC = () => {
   const { conversations, deleteConversation, setActiveConversation } = useChatStore();
   const { getProject } = useProjectStore();
   const { downloadedModels, removeImagesByConversationId } = useAppStore();
+  const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
   const hasModels = downloadedModels.length > 0;
 
@@ -34,14 +35,14 @@ export const ChatsListScreen: React.FC = () => {
 
   const handleNewChat = () => {
     if (!hasModels) {
-      Alert.alert('No Model', 'Please download a model first from the Models tab.');
+      setAlertState(showAlert('No Model', 'Please download a model first from the Models tab.'));
       return;
     }
     navigation.navigate('Chat', {});
   };
 
   const handleDeleteChat = (conversation: Conversation) => {
-    Alert.alert(
+    setAlertState(showAlert(
       'Delete Chat',
       `Delete "${conversation.title}"? This will also delete all images generated in this chat.`,
       [
@@ -50,6 +51,7 @@ export const ChatsListScreen: React.FC = () => {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
+            setAlertState(hideAlert());
             // Delete associated images from disk and store
             const imageIds = removeImagesByConversationId(conversation.id);
             for (const imageId of imageIds) {
@@ -59,7 +61,7 @@ export const ChatsListScreen: React.FC = () => {
           },
         },
       ]
-    );
+    ));
   };
 
   const formatDate = (dateString: string) => {
@@ -128,7 +130,7 @@ export const ChatsListScreen: React.FC = () => {
           style={[styles.newButton, !hasModels && styles.newButtonDisabled]}
           onPress={handleNewChat}
         >
-          <Icon name="plus" size={20} color={hasModels ? COLORS.text : COLORS.textMuted} />
+          <Icon name="plus" size={20} color={hasModels ? COLORS.primary : COLORS.textMuted} />
           <Text style={[styles.newButtonText, !hasModels && styles.newButtonTextDisabled]}>
             New
           </Text>
@@ -148,7 +150,7 @@ export const ChatsListScreen: React.FC = () => {
           </Text>
           {hasModels && (
             <TouchableOpacity style={styles.emptyButton} onPress={handleNewChat}>
-              <Icon name="plus" size={18} color={COLORS.text} />
+              <Icon name="plus" size={18} color={COLORS.primary} />
               <Text style={styles.emptyButtonText}>New Chat</Text>
             </TouchableOpacity>
           )}
@@ -163,6 +165,13 @@ export const ChatsListScreen: React.FC = () => {
           testID="conversation-list"
         />
       )}
+      <CustomAlert
+        visible={alertState.visible}
+        title={alertState.title}
+        message={alertState.message}
+        buttons={alertState.buttons}
+        onClose={() => setAlertState(hideAlert())}
+      />
     </SafeAreaView>
   );
 };
@@ -182,26 +191,27 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    ...TYPOGRAPHY.h2,
     color: COLORS.text,
   },
   newButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.primary,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: COLORS.primary,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
     gap: 6,
   },
   newButtonDisabled: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: 'transparent',
+    borderColor: COLORS.border,
   },
   newButtonText: {
-    color: COLORS.text,
-    fontSize: 14,
-    fontWeight: '600',
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.primary,
   },
   newButtonTextDisabled: {
     color: COLORS.textMuted,
@@ -220,11 +230,11 @@ const styles = StyleSheet.create({
   chatIcon: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 8,
     backgroundColor: COLORS.primary + '20',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: SPACING.md,
   },
   chatContent: {
     flex: 1,
@@ -236,18 +246,17 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   chatTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    ...TYPOGRAPHY.body,
     color: COLORS.text,
     flex: 1,
     marginRight: 8,
   },
   chatDate: {
-    fontSize: 12,
+    ...TYPOGRAPHY.meta,
     color: COLORS.textMuted,
   },
   chatPreview: {
-    fontSize: 14,
+    ...TYPOGRAPHY.bodySmall,
     color: COLORS.textSecondary,
   },
   projectBadge: {
@@ -259,7 +268,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   projectBadgeText: {
-    fontSize: 11,
+    ...TYPOGRAPHY.meta,
     color: COLORS.textMuted,
   },
   emptyState: {
@@ -271,21 +280,20 @@ const styles = StyleSheet.create({
   emptyIcon: {
     width: 72,
     height: 72,
-    borderRadius: 36,
-    borderWidth: 2,
+    borderRadius: 8,
+    borderWidth: 1,
     borderColor: COLORS.border,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
   },
   emptyTitle: {
-    fontSize: 20,
-    fontWeight: '600',
+    ...TYPOGRAPHY.h2,
     color: COLORS.text,
     marginBottom: 8,
   },
   emptyText: {
-    fontSize: 14,
+    ...TYPOGRAPHY.bodySmall,
     color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
@@ -294,15 +302,16 @@ const styles = StyleSheet.create({
   emptyButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.primary,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: COLORS.primary,
     paddingHorizontal: 20,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 8,
     gap: 8,
   },
   emptyButtonText: {
-    color: COLORS.text,
-    fontSize: 16,
-    fontWeight: '600',
+    ...TYPOGRAPHY.body,
+    color: COLORS.primary,
   },
 });

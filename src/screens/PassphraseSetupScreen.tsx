@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  Alert,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
@@ -12,7 +11,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Card } from '../components';
-import { COLORS } from '../constants';
+import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
+import { COLORS, TYPOGRAPHY, FONTS } from '../constants';
 import { authService } from '../services/authService';
 import { useAuthStore } from '../stores/authStore';
 
@@ -31,6 +31,7 @@ export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
   const [newPassphrase, setNewPassphrase] = useState('');
   const [confirmPassphrase, setConfirmPassphrase] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
   const { setEnabled } = useAuthStore();
 
@@ -48,13 +49,13 @@ export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
     // Validate new passphrase
     const error = validatePassphrase(newPassphrase);
     if (error) {
-      Alert.alert('Invalid Passphrase', error);
+      setAlertState(showAlert('Invalid Passphrase', error));
       return;
     }
 
     // Check confirmation matches
     if (newPassphrase !== confirmPassphrase) {
-      Alert.alert('Mismatch', 'Passphrases do not match');
+      setAlertState(showAlert('Mismatch', 'Passphrases do not match'));
       return;
     }
 
@@ -65,26 +66,26 @@ export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
         // Verify current passphrase and change
         const success = await authService.changePassphrase(currentPassphrase, newPassphrase);
         if (!success) {
-          Alert.alert('Error', 'Current passphrase is incorrect');
+          setAlertState(showAlert('Error', 'Current passphrase is incorrect'));
           setIsSubmitting(false);
           return;
         }
-        Alert.alert('Success', 'Passphrase changed successfully');
+        setAlertState(showAlert('Success', 'Passphrase changed successfully'));
       } else {
         // Set new passphrase
         const success = await authService.setPassphrase(newPassphrase);
         if (!success) {
-          Alert.alert('Error', 'Failed to set passphrase');
+          setAlertState(showAlert('Error', 'Failed to set passphrase'));
           setIsSubmitting(false);
           return;
         }
         setEnabled(true);
-        Alert.alert('Success', 'Passphrase lock enabled');
+        setAlertState(showAlert('Success', 'Passphrase lock enabled'));
       }
 
       onComplete();
     } catch (error) {
-      Alert.alert('Error', 'An error occurred. Please try again.');
+      setAlertState(showAlert('Error', 'An error occurred. Please try again.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -180,6 +181,13 @@ export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
           />
         </ScrollView>
       </KeyboardAvoidingView>
+      <CustomAlert
+        visible={alertState.visible}
+        title={alertState.title}
+        message={alertState.message}
+        buttons={alertState.buttons}
+        onClose={() => setAlertState(hideAlert())}
+      />
     </SafeAreaView>
   );
 };
@@ -201,12 +209,11 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
   },
   cancelButton: {
-    fontSize: 16,
+    ...TYPOGRAPHY.body,
     color: COLORS.textSecondary,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
+    ...TYPOGRAPHY.h3,
     color: COLORS.text,
   },
   content: {
@@ -220,10 +227,10 @@ const styles = StyleSheet.create({
     marginVertical: 24,
   },
   icon: {
-    fontSize: 64,
+    ...TYPOGRAPHY.display,
   },
   description: {
-    fontSize: 15,
+    ...TYPOGRAPHY.body,
     color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
@@ -236,8 +243,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   inputLabel: {
-    fontSize: 14,
-    fontWeight: '500',
+    ...TYPOGRAPHY.bodySmall,
     color: COLORS.text,
     marginBottom: 8,
   },
@@ -246,19 +252,19 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     color: COLORS.text,
-    fontSize: 16,
+    fontFamily: FONTS.mono,
+    fontSize: 14,
   },
   tips: {
     marginBottom: 24,
   },
   tipsTitle: {
-    fontSize: 14,
-    fontWeight: '500',
+    ...TYPOGRAPHY.bodySmall,
     color: COLORS.textSecondary,
     marginBottom: 8,
   },
   tipItem: {
-    fontSize: 13,
+    ...TYPOGRAPHY.label,
     color: COLORS.textMuted,
     lineHeight: 22,
   },
