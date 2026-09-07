@@ -23,7 +23,7 @@
     "test:js": "node --test scripts/__tests__/run-jest-shards.test.mjs && node scripts/run-jest-shards.mjs",
     "test:js:serial": "NODE_OPTIONS=--max-old-space-size=8192 jest --coverage --maxWorkers=1",
     "test:js:shard": "NODE_OPTIONS=--max-old-space-size=2048 jest --coverage --maxWorkers=1",
-    "test:coverage:workspace": "npm run test:js && npm --prefix ../shared run coverage:consumers -- --consumers=mobile,mobile-pro",
+    "test:coverage:workspace": "npm run test:js && npm --prefix ../shared run coverage:consumers -- --consumers=mobile,mobile-pro --consumer-dir=mobile=$PWD --consumer-dir=mobile-pro=$PWD",
     "test:handles": "NODE_OPTIONS=--max-old-space-size=8192 jest --detectOpenHandles --runInBand",
     "test:e2e:ios-sync-adapter": "node --test scripts/physical-sync/__tests__/iosKnowledgeSyncDeviceAdapter.test.mjs",
     "sync:ios-adapter": "node --experimental-strip-types --no-warnings scripts/physical-sync/iosKnowledgeSyncAdapter.mjs",
