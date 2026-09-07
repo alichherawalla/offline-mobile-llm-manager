@@ -108,7 +108,7 @@ export const ToolsScreen: React.FC = () => {
             </View>
           );
         })}
-        {toolSaveFailure && (
+        {Boolean(toolSaveFailure) && (
           <Text
             style={[styles.hint, { color: TOOL_WARNING_COLOR }]}
             accessibilityLiveRegion="polite"

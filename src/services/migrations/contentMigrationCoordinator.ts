@@ -9,6 +9,7 @@ import {
   legacyContentSource,
 } from './contentPersistenceAdapters';
 import { preflightContentPersistenceMigration } from './contentPersistencePreflight';
+import { generateId } from '../../utils/generateId';
 
 export type ContentMigrationStatus =
   | { readonly phase: 'not-started' }
@@ -37,7 +38,7 @@ function publish(next: ContentMigrationStatus): void {
 }
 
 function runId(): string {
-  return `content-migration-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `content-migration-${generateId()}`;
 }
 
 export const contentMigrationStatus = {
@@ -50,7 +51,7 @@ export const contentMigrationStatus = {
 
 /** One process-wide, restart-safe migration. Concurrent callers share the same run. */
 export function startContentPersistenceMigration(): Promise<ContentMigrationState> {
-  if (activeRun) return activeRun;
+  if (activeRun !== null) return activeRun;
   activeRun = executeMigration().finally(() => {
     activeRun = null;
   });
@@ -67,7 +68,7 @@ export function retryContentPersistenceMigration(): Promise<ContentMigrationStat
     return null;
   }
 
-  if (activeRun) return activeRun;
+  if (activeRun !== null) return activeRun;
   return startContentPersistenceMigration();
 }
 

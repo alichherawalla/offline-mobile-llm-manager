@@ -251,7 +251,7 @@ export const KnowledgeBaseScreen: React.FC = () => {
         </View>
       ) : (
         <>
-      {indexingFile && (
+      {Boolean(indexingFile) && (
         <View style={styles.indexingBanner}>
           <LoadingDots color={colors.primary} />
           <Text style={styles.indexingText}>Indexing {indexingFile}...</Text>

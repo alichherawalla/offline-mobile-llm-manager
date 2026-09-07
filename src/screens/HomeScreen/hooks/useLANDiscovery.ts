@@ -70,7 +70,9 @@ export function useLANDiscovery({
       if (connectionFailures.length > 0) {
         const failure: ModelsFailure = {
           kind: 'runtime',
-          message: connectionFailures.map(modelsFailureMessage).join('\n'),
+          message: connectionFailures
+            .map(connectionFailure => modelsFailureMessage(connectionFailure))
+            .join('\n'),
         };
         setAlertState(showAlert('Server Check Failed', failure.message));
         return failed(failure);

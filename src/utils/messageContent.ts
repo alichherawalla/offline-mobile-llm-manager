@@ -34,7 +34,9 @@ const XML_TOOL_CALL_FUNCTION_MARKER =
   SHARED_XML_TOOL_CALL_FUNCTION_MARKER;
 const XML_TOOL_CALL_FUNCTION_CLOSER = '</function>';
 
-const CLOSERS_ALT = TOOL_CALL_CLOSERS.map(escapeRegExp).join('|');
+const CLOSERS_ALT = TOOL_CALL_CLOSERS.map(closer => escapeRegExp(closer)).join(
+  '|',
+);
 // One closed-block pattern per opener, built from the grammar so parser and stripper cannot drift.
 const TOOL_CALL_BLOCK_PATTERNS: RegExp[] = TOOL_CALL_OPENERS.map(
   open =>

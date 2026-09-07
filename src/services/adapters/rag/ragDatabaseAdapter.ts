@@ -69,7 +69,7 @@ function decodeRagDocuments(value: unknown): RagDocument[] {
   if (!Array.isArray(value)) {
     throw new Error('Invalid RAG document query result: expected rows.');
   }
-  return value.map(decodeRagDocument);
+  return value.map((row, index) => decodeRagDocument(row, index));
 }
 
 class RagDatabase {
