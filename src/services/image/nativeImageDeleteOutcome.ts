@@ -34,7 +34,10 @@ export function projectNativeImageDeletePath(
   rawPath: unknown,
   generatedImageDirectory: string,
 ): NativeImageDeletePathProjection {
-  const root = generatedImageDirectory.replace(/\/+$/, '');
+  let root = generatedImageDirectory;
+  while (root.endsWith('/')) {
+    root = root.slice(0, -1);
+  }
   if (typeof rawPath !== 'string' || rawPath.includes('\0')) {
     return {
       ok: false,

@@ -258,7 +258,7 @@ export const KnowledgeBaseScreen: React.FC = () => {
         </View>
       )}
 
-      {documentsError && !indexingFile && (
+      {Boolean(documentsError) && !indexingFile && (
         <View style={styles.errorCard} testID="kb-load-error-card">
           <Icon name="alert-triangle" size={16} color={colors.error} />
           <View style={styles.errorTextWrap}>

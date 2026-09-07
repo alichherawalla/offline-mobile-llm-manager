@@ -62,7 +62,7 @@ let executing = false;
 /** Project committed Shared Models settings through the one Shared image-settings resolver. */
 export function resolvedCommittedImageSettings(
   settings: Readonly<Record<string, unknown>>,
-  request: ImageApplicationRequest = { prompt: '' },
+  request?: ImageApplicationRequest,
 ) {
   const numberSetting = (key: string): number | undefined => {
     const value = settings[key];
@@ -75,7 +75,7 @@ export function resolvedCommittedImageSettings(
   return {
     ...resolveImageGenerationSettings({
       platform: Platform.OS,
-      request,
+      request: request ?? { prompt: '' },
       settings: {
         steps: numberSetting('imageSteps'),
         guidanceScale: numberSetting('imageGuidanceScale'),
