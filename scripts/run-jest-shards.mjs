@@ -26,6 +26,36 @@ export function recommendedShardCount(availableCpus = os.availableParallelism())
   return Math.max(1, Math.min(6, availableCpus - 2));
 }
 
+// A shard's Jest process holds the coverage of every file it ran, so its peak
+// heap scales with the fraction of the suite it owns. Sizing one shard for a
+// whole suite at the six-shard budget is what makes a single-shard run die with
+// "Ineffective mark-compacts near heap limit". Budget by fraction owned, and
+// never ask for more than the machine can actually back.
+export const FULL_SUITE_HEAP_MB = 6144;
+const MIN_SHARD_HEAP_MB = 2048;
+
+export function resolveShardHeapMb(
+  shardCount,
+  totalMemoryMb = Math.floor(os.totalmem() / 1024 / 1024),
+  override = process.env.MOBILE_JEST_SHARD_HEAP_MB,
+) {
+  if (override !== undefined && override !== '') {
+    const requested = Number(override);
+    if (!Number.isInteger(requested) || requested < 512) {
+      throw new Error('MOBILE_JEST_SHARD_HEAP_MB must be an integer of at least 512.');
+    }
+    return requested;
+  }
+  if (!Number.isInteger(shardCount) || shardCount < 1) {
+    throw new Error('shardCount must be a positive integer.');
+  }
+  const byFractionOwned = Math.ceil(FULL_SUITE_HEAP_MB / shardCount);
+  // Leave the OS and the other concurrent shards real memory: an OS kill is a
+  // worse failure than a slower GC.
+  const machineCeiling = Math.floor((totalMemoryMb * 0.7) / shardCount);
+  return Math.max(MIN_SHARD_HEAP_MB, Math.min(byFractionOwned, Math.max(machineCeiling, MIN_SHARD_HEAP_MB)));
+}
+
 export function resolveShardCount(
   value = process.env.MOBILE_JEST_SHARDS,
   availableCpus = os.availableParallelism(),
@@ -55,7 +85,7 @@ function prefixStream(stream, prefix, destination, logStream) {
   });
 }
 
-function runShard(index, total, extraArgs = []) {
+function runShard(index, total, extraArgs = [], heapMb = resolveShardHeapMb(total)) {
   const coverageDirectory = path.join(COVERAGE_ROOT, `shard-${index}`);
   const logPath = path.join(COVERAGE_ROOT, `shard-${index}.log`);
   const logStream = fs.createWriteStream(logPath);
@@ -77,7 +107,7 @@ function runShard(index, total, extraArgs = []) {
       ...process.env,
       FORCE_COLOR: '1',
       JEST_COVERAGE_COLLECTION_SHARD: '1',
-      NODE_OPTIONS: `--max-old-space-size=${process.env.MOBILE_JEST_SHARD_HEAP_MB ?? '2048'}`,
+      NODE_OPTIONS: `--max-old-space-size=${heapMb}`,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

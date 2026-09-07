@@ -3,7 +3,12 @@ import test from 'node:test';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { recommendedShardCount, resolveShardCount } from '../run-jest-shards.mjs';
+import {
+  FULL_SUITE_HEAP_MB,
+  recommendedShardCount,
+  resolveShardCount,
+  resolveShardHeapMb,
+} from '../run-jest-shards.mjs';
 
 const require = createRequire(import.meta.url);
 const metroConfig = require('../../metro.config.js');
@@ -42,4 +47,22 @@ test('maps the Mobile and application-facade Shared dependencies into the Metro 
 
 test('transforms dependency namespace exports before Metro converts modules', () => {
   assert.ok(babelConfig.plugins.includes('@babel/plugin-transform-export-namespace-from'));
+});
+
+test('a shard gets heap for the share of the suite it actually owns', () => {
+  // Six shards on this dev machine: the proven-good budget stays put.
+  assert.equal(resolveShardHeapMb(6, 32768, undefined), 2048);
+  // One shard owns the whole suite, so it gets the whole-suite budget.
+  assert.equal(resolveShardHeapMb(1, 32768, undefined), FULL_SUITE_HEAP_MB);
+  // The three-core CI runner collapses to one shard on 7 GB of RAM: more than
+  // the 2 GB that crashed it, and still inside what the machine can back.
+  const ciHeap = resolveShardHeapMb(1, 7168, undefined);
+  assert.ok(ciHeap > 2048, `expected more than the crashing 2048 MB, got ${ciHeap}`);
+  assert.ok(ciHeap <= Math.floor(7168 * 0.7), `expected to stay under RAM, got ${ciHeap}`);
+  // A small machine never drops below the floor a shard needs to run at all.
+  assert.equal(resolveShardHeapMb(2, 2048, undefined), 2048);
+  // An explicit request wins, and nonsense is rejected.
+  assert.equal(resolveShardHeapMb(1, 32768, '3072'), 3072);
+  assert.throws(() => resolveShardHeapMb(1, 32768, '128'));
+  assert.throws(() => resolveShardHeapMb(0, 32768, undefined));
 });
