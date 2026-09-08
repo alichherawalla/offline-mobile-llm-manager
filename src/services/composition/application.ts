@@ -505,9 +505,7 @@ let starting: ReturnType<OffGridApplication['start']> | null = null;
 
 function mobileModelServices(): Pick<
   typeof import('../modelServices'),
-  | 'startMobileModelServices'
-  | 'stopMobileModelServices'
-  | 'refreshMobileModelServices'
+  'startMobileModelServices' | 'stopMobileModelServices'
 > {
   // Deferred because modelServices resolves this composition root through applicationFacade().
   // getMobileApplication() has created the root before this function is called, so both sides use
@@ -575,7 +573,6 @@ export function startMobileApplication(): ReturnType<
   starting ??= (async () => {
     const modelServices = mobileModelServices();
     modelServices.startMobileModelServices();
-    await modelServices.refreshMobileModelServices();
     try {
       const result = await current.start();
       if (result.status !== 'running') {
