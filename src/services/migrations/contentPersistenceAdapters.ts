@@ -99,10 +99,9 @@ class MobileContentMigrationTarget implements ContentMigrationTargetPort {
     let inspected = 0;
     for (const {conversationId, message} of candidates) {
       const messageId = stableMessageId(message);
-      const currentSnapshot = await this.workspaceContent.read();
-      const current = currentSnapshot.messages.find(
-        candidate => candidate.id === messageId,
-      );
+      const currentAtRevision =
+        await this.workspaceContent.readMessageAtCurrentRevision(messageId);
+      const current = currentAtRevision.message;
       if (
         current &&
         current.conversationId === conversationId &&
@@ -124,7 +123,7 @@ class MobileContentMigrationTarget implements ContentMigrationTargetPort {
               : {}),
           };
           const committed = await this.workspaceContent.commit({
-            expectedRevision: currentSnapshot.revision,
+            expectedRevision: currentAtRevision.revision,
             origin: 'migration',
             outbox: 'enqueue',
             changes: [{

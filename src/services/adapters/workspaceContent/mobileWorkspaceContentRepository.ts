@@ -75,6 +75,12 @@ type MessageRow = {
   updated_at: string;
 };
 
+const MESSAGE_ROW_SELECT = `SELECT m.id, m.conversation_id, m.turn_id, m.position, m.role,
+  m.content, m.context_json, m.legacy_order_created_at, m.order_token_json, l.state_json,
+  m.created_at, m.updated_at
+  FROM workspace_content_messages m
+  LEFT JOIN workspace_content_local_message_state l ON l.message_id = m.id`;
+
 export { projectMobileMessageContent } from './mobileWorkspaceMessageContentProjection';
 
 function attachmentLocationInput(
@@ -168,11 +174,7 @@ export class MobileWorkspaceContentRepository implements WorkspaceContentReposit
     ).map(conversationFromRow);
     const messages = rows<MessageRow>(
       this.db,
-      `SELECT m.id, m.conversation_id, m.turn_id, m.position, m.role, m.content,
-              m.context_json, m.legacy_order_created_at, m.order_token_json, l.state_json, m.created_at, m.updated_at
-       FROM workspace_content_messages m
-       LEFT JOIN workspace_content_local_message_state l ON l.message_id = m.id
-       ORDER BY m.position ASC, m.id ASC`,
+      `${MESSAGE_ROW_SELECT} ORDER BY m.position ASC, m.id ASC`,
     ).map(messageFromRow);
     const chatTurns = rows<TurnRow>(
       this.db,
@@ -193,6 +195,23 @@ export class MobileWorkspaceContentRepository implements WorkspaceContentReposit
       conversations,
       messages,
       chatTurns,
+    };
+  }
+
+  /** Read one canonical message and the revision that protects its next commit. */
+  async readMessageAtCurrentRevision(messageId: string): Promise<{
+    readonly revision: string;
+    readonly message?: MessageRecord;
+  }> {
+    const revision = this.currentRevision();
+    const row = rows<MessageRow>(
+      this.db,
+      `${MESSAGE_ROW_SELECT} WHERE m.id = ? LIMIT 1`,
+      [messageId],
+    )[0];
+    return {
+      revision,
+      ...(row ? {message: messageFromRow(row)} : {}),
     };
   }
 
