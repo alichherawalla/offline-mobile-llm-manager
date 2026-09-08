@@ -6,6 +6,11 @@ import type {
 import {appendDocumentText} from '@offgrid/models';
 
 type MobileAttachmentInput = Readonly<Record<string, unknown>>;
+type ProjectedAttachment = {
+  part: PortableMessageContentPart;
+  transcription?: string;
+  documentText?: {fileName?: string; textContent?: string};
+};
 
 /** Project legacy Mobile attachments onto canonical rich parts plus indexed local locations. */
 export function projectMobileMessageContent(input: {
@@ -28,87 +33,99 @@ export function projectMobileMessageContent(input: {
     }
     const attachment = value as MobileAttachmentInput;
     const type = requiredString(attachment.type, `${label}.type`);
-    const unsupported = (type === 'audio'
-      ? ['pending']
-      : type === 'document'
-        ? ['pending', 'audioFormat', 'audioDurationSeconds']
-        : ['pending', 'textContent', 'audioFormat', 'audioDurationSeconds'])
-      .find(key => attachment[key] !== undefined);
-    if (unsupported) throw new Error(`${label}.${unsupported} has no canonical rich-content field`);
-    const mimeType = optionalString(attachment.mimeType, `${label}.mimeType`);
-    const name = optionalString(attachment.fileName, `${label}.fileName`);
-    const sizeBytes = optionalNonNegativeNumber(
-      attachment.fileSize,
-      `${label}.fileSize`,
-    );
-    const contentId = requiredString(attachment.id, `${label}.id`);
-    if (type === 'image') {
-      parts.push({
-        type: 'image', contentId, id: contentId,
-        ...(name === undefined ? {} : {name}),
-        ...(mimeType === undefined ? {} : {mimeType}),
-        ...(sizeBytes === undefined ? {} : {sizeBytes}),
-        ...optionalDimensions(attachment, label),
-      });
-    } else if (type === 'audio') {
-      const transcription = optionalString(
-        attachment.textContent,
-        `${label}.textContent`,
-      );
-      const textPart = parts[0];
-      if (
-        transcription &&
-        textPart?.type === 'text' &&
-        textPart.text.length === 0
-      ) {
-        parts[0] = {type: 'text', text: transcription};
-      } else if (
-        transcription &&
-        textPart?.type === 'text' &&
-        transcription !== textPart.text
-      ) {
-        throw new Error(`${label}.textContent conflicts with message.content`);
-      }
-      const durationSeconds = optionalNonNegativeNumber(
-        attachment.audioDurationSeconds,
-        `${label}.audioDurationSeconds`,
-      );
-      const canonicalMimeType = canonicalAudioMimeType(
-        attachment.audioFormat,
-        mimeType,
-        label,
-      );
-      parts.push({
-        type: 'audio', contentId,
-        ...(name === undefined ? {} : {name}),
-        ...(canonicalMimeType === undefined
-          ? {}
-          : {mimeType: canonicalMimeType}),
-        ...(sizeBytes === undefined ? {} : {sizeBytes}),
-        ...(durationSeconds === undefined ? {} : {durationSeconds}),
-      });
-    } else if (type === 'document') {
-      const extractedText = optionalString(
-        attachment.textContent,
-        `${label}.textContent`,
-      );
-      const textPart = parts[0];
-      if (textPart?.type === 'text') {
-        parts[0] = {
-          type: 'text',
-          text: appendDocumentText(textPart.text, {
-            ...(name === undefined ? {} : {fileName: name}),
-            ...(extractedText === undefined ? {} : {textContent: extractedText}),
-          }),
-        };
-      }
-      parts.push({type: 'file', contentId, ...(name === undefined ? {} : {name}),
-        ...(mimeType === undefined ? {} : {mimeType}),
-        ...(sizeBytes === undefined ? {} : {sizeBytes})});
-    } else throw new Error(`${label}.type is not supported`);
+    assertSupportedFields(type, attachment, label);
+    const projected = projectAttachment(type, attachment, label);
+    mergeAttachmentText(parts, projected, label);
+    parts.push(projected.part);
     locations.push({index: offset + 1, uri: requiredString(attachment.uri, `${label}.uri`)});
   }
   return {content: parts, locations};
+}
+
+function assertSupportedFields(
+  type: string,
+  attachment: MobileAttachmentInput,
+  label: string,
+): void {
+  const unsupported = (type === 'audio'
+    ? ['pending']
+    : type === 'document'
+      ? ['pending', 'audioFormat', 'audioDurationSeconds']
+      : ['pending', 'textContent', 'audioFormat', 'audioDurationSeconds']
+  ).find(key => attachment[key] !== undefined);
+  if (unsupported) {
+    throw new Error(`${label}.${unsupported} has no canonical rich-content field`);
+  }
+}
+
+function projectAttachment(
+  type: string,
+  attachment: MobileAttachmentInput,
+  label: string,
+): ProjectedAttachment {
+  const mimeType = optionalString(attachment.mimeType, `${label}.mimeType`);
+  const name = optionalString(attachment.fileName, `${label}.fileName`);
+  const sizeBytes = optionalNonNegativeNumber(attachment.fileSize, `${label}.fileSize`);
+  const contentId = requiredString(attachment.id, `${label}.id`);
+  const common = {
+    contentId,
+    ...(name === undefined ? {} : {name}),
+    ...(sizeBytes === undefined ? {} : {sizeBytes}),
+  };
+  if (type === 'image') {
+    return {part: {type: 'image', id: contentId, ...common,
+      ...(mimeType === undefined ? {} : {mimeType}),
+      ...optionalDimensions(attachment, label)}};
+  }
+  if (type === 'audio') {
+    const canonicalMimeType = canonicalAudioMimeType(
+      attachment.audioFormat,
+      mimeType,
+      label,
+    );
+    const durationSeconds = optionalNonNegativeNumber(
+      attachment.audioDurationSeconds,
+      `${label}.audioDurationSeconds`,
+    );
+    return {
+      part: {type: 'audio', ...common,
+        ...(canonicalMimeType === undefined ? {} : {mimeType: canonicalMimeType}),
+        ...(durationSeconds === undefined ? {} : {durationSeconds})},
+      transcription: optionalString(attachment.textContent, `${label}.textContent`),
+    };
+  }
+  if (type === 'document') {
+    const extractedText = optionalString(attachment.textContent, `${label}.textContent`);
+    return {
+      part: {type: 'file', ...common, ...(mimeType === undefined ? {} : {mimeType})},
+      documentText: {
+        ...(name === undefined ? {} : {fileName: name}),
+        ...(extractedText === undefined ? {} : {textContent: extractedText}),
+      },
+    };
+  }
+  throw new Error(`${label}.type is not supported`);
+}
+
+function mergeAttachmentText(
+  parts: PortableMessageContentPart[],
+  projected: ProjectedAttachment,
+  label: string,
+): void {
+  const textPart = parts[0];
+  if (textPart?.type !== 'text') return;
+  if (projected.documentText) {
+    parts[0] = {type: 'text', text: appendDocumentText(textPart.text, projected.documentText)};
+    return;
+  }
+  if (!projected.transcription) return;
+  if (textPart.text.length === 0) {
+    parts[0] = {type: 'text', text: projected.transcription};
+    return;
+  }
+  if (projected.transcription !== textPart.text) {
+    throw new Error(`${label}.textContent conflicts with message.content`);
+  }
 }
 
 function requiredString(value: unknown, label: string): string {
