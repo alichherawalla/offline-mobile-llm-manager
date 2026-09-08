@@ -289,7 +289,9 @@ export function createMobileDownloadedModelRegistryAdapter(
         );
       }
       if (kind === 'transcription') {
-        const file = input.artifactNames.find(name => /^ggml-.+\.bin$/i.test(name));
+        const file = input.artifactNames
+          .map(name => name.split('/').at(-1) ?? '')
+          .find(name => /^ggml-.+\.bin$/i.test(name));
         return file ? isModelDownloaded(whisperCatalogModelId(file)) : false;
       }
       return (await rows(kind)).some(model => belongs(model, input.familyId));
