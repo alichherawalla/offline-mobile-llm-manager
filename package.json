@@ -13,6 +13,7 @@
     "build:android": "cd android && ./gradlew :app:build --no-parallel",
     "ios": "react-native run-ios",
     "ios:device": "./scripts/ios-device.sh",
+    "ios:reload": "./scripts/ios-reload.sh",
     "lint": "eslint . && npm run lint:android && npm run lint:ios",
     "lint:android": "cd android && ./gradlew :app:lintDebug",
     "lint:ios": "swiftlint lint --quiet || echo 'SwiftLint not installed, skipping iOS lint'",
