@@ -875,6 +875,14 @@ export class MobileWorkspaceContentRepository implements WorkspaceContentReposit
   }
 }
 
+let canonicalWorkspaceContentRepository: MobileWorkspaceContentRepository | null = null;
+
+/** The one Mobile repository used by startup migration and the application composition. */
+export function getMobileWorkspaceContentRepository(): MobileWorkspaceContentRepository {
+  canonicalWorkspaceContentRepository ??= new MobileWorkspaceContentRepository();
+  return canonicalWorkspaceContentRepository;
+}
+
 function rows<T>(db: DB, statement: string, params?: Scalar[]): T[] {
   return db.executeSync(statement, params).rows as unknown as T[];
 }

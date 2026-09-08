@@ -1,12 +1,14 @@
 import {recoverLegacyAttachmentContent} from '@offgrid/application';
 import type { DB } from '@op-engineering/op-sqlite';
 import {
-  decodeWorkspaceMessageContent,
   encodeWorkspaceMessageContent,
   openWorkspaceContentDatabase,
   WORKSPACE_CONTENT_SCHEMA_VERSION,
 } from '../adapters/workspaceContent/workspaceContentDatabase';
-import { projectMobileMessageContent } from '../adapters/workspaceContent/mobileWorkspaceContentRepository';
+import {
+  getMobileWorkspaceContentRepository,
+  projectMobileMessageContent,
+} from '../adapters/workspaceContent/mobileWorkspaceContentRepository';
 import type {
   ContentMigrationTargetFacts,
   ContentMigrationTargetPort,
@@ -43,6 +45,7 @@ function rowCount(db: DB, table: string): number {
 
 class MobileContentMigrationTarget implements ContentMigrationTargetPort {
   private readonly db: DB;
+  private readonly workspaceContent = getMobileWorkspaceContentRepository();
 
   constructor() {
     this.db = openWorkspaceContentDatabase();
@@ -93,66 +96,63 @@ class MobileContentMigrationTarget implements ContentMigrationTargetPort {
     const candidates = messages.filter(({message}) =>
       Array.isArray(message.attachments) && message.attachments.length > 0,
     );
-    this.db.executeSync('BEGIN IMMEDIATE');
-    try {
-      let inspected = 0;
-      for (const {conversationId, message} of candidates) {
-        const messageId = stableMessageId(message);
-        const row = this.db.executeSync(
-          `SELECT m.conversation_id, m.role, m.content, l.state_json
-           FROM workspace_content_messages m
-           LEFT JOIN workspace_content_local_message_state l ON l.message_id = m.id
-           WHERE m.id = ?`,
-          [messageId],
-        ).rows[0];
-        if (
-          row &&
-          row.conversation_id === conversationId &&
-          row.role === message.role
-        ) {
-          const rich = projectMobileMessageContent({
-            content: message.content,
-            attachments: message.attachments,
+    let inspected = 0;
+    for (const {conversationId, message} of candidates) {
+      const messageId = stableMessageId(message);
+      const currentSnapshot = await this.workspaceContent.read();
+      const current = currentSnapshot.messages.find(
+        candidate => candidate.id === messageId,
+      );
+      if (
+        current &&
+        current.conversationId === conversationId &&
+        current.portable.role === message.role
+      ) {
+        const rich = projectMobileMessageContent({
+          content: message.content,
+          attachments: message.attachments,
+        });
+        const recovered = recoverLegacyAttachmentContent(
+          current.portable.content,
+          rich.content,
+        );
+        if (recovered) {
+          const local = {
+            ...current.local,
+            ...(rich.locations?.length
+              ? {contentLocations: rich.locations}
+              : {}),
+          };
+          const committed = await this.workspaceContent.commit({
+            expectedRevision: currentSnapshot.revision,
+            origin: 'migration',
+            outbox: 'enqueue',
+            changes: [{
+              kind: 'put',
+              entity: 'message',
+              record: {
+                ...current,
+                portable: {...current.portable, content: recovered},
+                local,
+              },
+            }],
           });
-          const recovered = recoverLegacyAttachmentContent(
-            decodeWorkspaceMessageContent(String(row.content)),
-            rich.content,
-          );
-          if (recovered) {
-            const currentLocal = row.state_json
-              ? record(JSON.parse(String(row.state_json)), 'message.local')
-              : {};
-            const local = {
-              ...currentLocal,
-              ...(rich.locations?.length
-                ? {contentLocations: rich.locations}
-                : {}),
-            };
-            this.db.executeSync(
-              'UPDATE workspace_content_messages SET content = ? WHERE id = ?',
-              [encodeWorkspaceMessageContent(recovered), messageId],
-            );
-            this.db.executeSync(
-              `INSERT INTO workspace_content_local_message_state (message_id, state_json)
-               VALUES (?, ?) ON CONFLICT(message_id) DO UPDATE SET state_json = excluded.state_json`,
-              [messageId, JSON.stringify(local)],
+          if (!committed.committed) {
+            throw new Error(
+              `Message ${messageId} changed during attachment recovery.`,
             );
           }
         }
-        lifecycle.onProgress(++inspected, candidates.length);
       }
-      lifecycle.onCopied();
-      this.db.executeSync(
-        `INSERT OR REPLACE INTO workspace_content_legacy_attachment_recovery
-         (version, completed_at) VALUES (?, ?)`,
-        [ATTACHMENT_RECOVERY_VERSION, new Date().toISOString()],
-      );
-      lifecycle.onVerified();
-      this.db.executeSync('COMMIT');
-    } catch (error) {
-      this.db.executeSync('ROLLBACK');
-      throw error;
+      lifecycle.onProgress(++inspected, candidates.length);
     }
+    lifecycle.onCopied();
+    this.db.executeSync(
+      `INSERT OR REPLACE INTO workspace_content_legacy_attachment_recovery
+       (version, completed_at) VALUES (?, ?)`,
+      [ATTACHMENT_RECOVERY_VERSION, new Date().toISOString()],
+    );
+    lifecycle.onVerified();
   }
 
   async replaceWithLegacy(

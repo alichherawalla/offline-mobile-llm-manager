@@ -33,7 +33,10 @@ import type { MobileManagedArtifactIO } from '../modelServices/modelDownloadArti
 import { modelsChatPort } from './chat';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import { mobileCoreSpeechPorts } from '../adapters/speech/mobileSpeechInputPorts';
-import { MobileWorkspaceContentRepository } from '../adapters/workspaceContent/mobileWorkspaceContentRepository';
+import {
+  getMobileWorkspaceContentRepository,
+  type MobileWorkspaceContentRepository,
+} from '../adapters/workspaceContent/mobileWorkspaceContentRepository';
 import { MobileProjectDeletionIntentRepository } from '../adapters/workspaceContent/mobileProjectDeletionIntentRepository';
 import { MobileConversationDeletionIntentRepository } from '../adapters/workspaceContent/mobileConversationDeletionIntentRepository';
 import { MobileProjectMediaCleanup } from '../adapters/workspaceContent/mobileProjectMediaCleanup';
@@ -75,7 +78,6 @@ let releaseFailureObserver: (() => void) | null = null;
  * acknowledge, and failed-attempt transitions), so it satisfies Shared's
  * `createWorkspaceContentOutboxDeliveryOwner({repository, delivery, newClaimId})` unchanged.
  */
-let workspaceContentRepository: MobileWorkspaceContentRepository | null = null;
 let projectDeletionIntents: MobileProjectDeletionIntentRepository | null = null;
 let conversationDeletionIntents: MobileConversationDeletionIntentRepository | null =
   null;
@@ -101,11 +103,6 @@ function getReleaseAdmissions(): ReceivedMediaReleaseAdmissionPort {
   releaseAdmissions ??= new MobileReceivedMediaReleaseAdmissions();
   return releaseAdmissions;
 }
-function getMobileWorkspaceContentRepository(): MobileWorkspaceContentRepository {
-  workspaceContentRepository ??= new MobileWorkspaceContentRepository();
-  return workspaceContentRepository;
-}
-
 function getLocalResourcePrivacyWorkflow() {
   localResourcePrivacyWorkflow ??=
     getMobileWorkspaceContentRepository().createLocalResourcePrivacyWorkflow(
