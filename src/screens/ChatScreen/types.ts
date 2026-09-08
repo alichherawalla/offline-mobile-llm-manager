@@ -50,6 +50,25 @@ function hasImageAttachment(message: Message): boolean {
   );
 }
 
+/** Prefer canonical tool-result rows when they exist; recovered artifacts fill only missing rows. */
+function withoutDuplicateToolArtifacts(messages: readonly Message[]): Message[] {
+  const completedCallIds = new Set(
+    messages
+      .filter(message => message.role === 'tool' && message.toolCallId)
+      .map(message => message.toolCallId as string),
+  );
+  if (completedCallIds.size === 0) return [...messages];
+  return messages.map(message => {
+    if (!message.toolArtifacts?.length) return message;
+    const toolArtifacts = message.toolArtifacts.filter(
+      artifact => !artifact.id || !completedCallIds.has(artifact.id),
+    );
+    return toolArtifacts.length === message.toolArtifacts.length
+      ? message
+      : {...message, toolArtifacts};
+  });
+}
+
 function isGeneratedImageResult(message: Message): boolean {
   return (
     message.role === 'assistant' &&
@@ -237,7 +256,9 @@ export function getDisplayMessages(
     groupSupportingContextWithImage(
       localDisplayMessages(
         // The same rule the list rows use, so the thread and its preview never disagree.
-        [...visibleMessages(allMessages, streaming.localDeviceId)],
+        withoutDuplicateToolArtifacts([
+          ...visibleMessages(allMessages, streaming.localDeviceId),
+        ]),
         streaming,
       ),
     ),
