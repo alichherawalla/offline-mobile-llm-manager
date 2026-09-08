@@ -26,10 +26,12 @@ export function projectMobileMessageContent(input: {
       throw new Error(`${label} is not an object`);
     }
     const attachment = value as MobileAttachmentInput;
-    const unsupported = ['pending', 'textContent', 'fileSize', 'audioFormat', 'audioDurationSeconds']
+    const type = requiredString(attachment.type, `${label}.type`);
+    const unsupported = (type === 'audio'
+      ? ['pending', 'fileSize']
+      : ['pending', 'textContent', 'fileSize', 'audioFormat', 'audioDurationSeconds'])
       .find(key => attachment[key] !== undefined);
     if (unsupported) throw new Error(`${label}.${unsupported} has no canonical rich-content field`);
-    const type = requiredString(attachment.type, `${label}.type`);
     const mimeType = optionalString(attachment.mimeType, `${label}.mimeType`);
     if (type === 'image') {
       if (attachment.fileName !== undefined) {
@@ -41,7 +43,42 @@ export function projectMobileMessageContent(input: {
         ...optionalDimensions(attachment, label),
       });
     } else if (type === 'audio') {
-      parts.push({type: 'audio', ...(mimeType === undefined ? {} : {mimeType})});
+      const name = optionalString(attachment.fileName, `${label}.fileName`);
+      const transcription = optionalString(
+        attachment.textContent,
+        `${label}.textContent`,
+      );
+      const textPart = parts[0];
+      if (
+        transcription &&
+        textPart?.type === 'text' &&
+        textPart.text.length === 0
+      ) {
+        parts[0] = {type: 'text', text: transcription};
+      } else if (
+        transcription &&
+        textPart?.type === 'text' &&
+        transcription !== textPart.text
+      ) {
+        throw new Error(`${label}.textContent conflicts with message.content`);
+      }
+      const durationSeconds = optionalNonNegativeNumber(
+        attachment.audioDurationSeconds,
+        `${label}.audioDurationSeconds`,
+      );
+      const canonicalMimeType = canonicalAudioMimeType(
+        attachment.audioFormat,
+        mimeType,
+        label,
+      );
+      parts.push({
+        type: 'audio',
+        ...(name === undefined ? {} : {name}),
+        ...(canonicalMimeType === undefined
+          ? {}
+          : {mimeType: canonicalMimeType}),
+        ...(durationSeconds === undefined ? {} : {durationSeconds}),
+      });
     } else if (type === 'document') {
       const name = optionalString(attachment.fileName, `${label}.fileName`);
       parts.push({type: 'file', ...(name === undefined ? {} : {name}),
@@ -61,6 +98,36 @@ function optionalString(value: unknown, label: string): string | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== 'string') throw new Error(`${label} is not text`);
   return value;
+}
+
+function optionalNonNegativeNumber(
+  value: unknown,
+  label: string,
+): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new Error(`${label} is not a non-negative finite number`);
+  }
+  return value;
+}
+
+function canonicalAudioMimeType(
+  format: unknown,
+  mimeType: string | undefined,
+  label: string,
+): string | undefined {
+  if (format === undefined) return mimeType;
+  if (format !== 'wav' && format !== 'mp3') {
+    throw new Error(`${label}.audioFormat is not supported`);
+  }
+  const expected =
+    format === 'wav'
+      ? ['audio/wav', 'audio/x-wav']
+      : ['audio/mpeg', 'audio/mp3'];
+  if (mimeType !== undefined && !expected.includes(mimeType.toLowerCase())) {
+    throw new Error(`${label}.audioFormat conflicts with ${label}.mimeType`);
+  }
+  return mimeType ?? expected[0];
 }
 
 function optionalDimensions(attachment: MobileAttachmentInput, label: string) {
