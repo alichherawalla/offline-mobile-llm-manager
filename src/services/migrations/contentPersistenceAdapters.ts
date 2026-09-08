@@ -2,9 +2,11 @@ import type {
   ChatTurnRecord,
   LocalMessageContentLocation,
 } from '@offgrid/application';
+import {recoverLegacyAttachmentContent} from '@offgrid/application';
 import { serializeSyncedMessageContext } from '@offgrid/sync';
 import type { DB } from '@op-engineering/op-sqlite';
 import {
+  decodeWorkspaceMessageContent,
   encodeWorkspaceMessageContent,
   openWorkspaceContentDatabase,
   WORKSPACE_CONTENT_SCHEMA_VERSION,
@@ -30,6 +32,7 @@ export { legacyContentSource } from './legacyContentSource';
 // owner. They are never written here, and nothing reads them at runtime. Remove them only when no
 // supported upgrade path can still start from a device that holds them.
 const TARGET_VERSION = WORKSPACE_CONTENT_SCHEMA_VERSION;
+const ATTACHMENT_RECOVERY_VERSION = 1;
 
 function text(value: unknown, label: string): string {
   if (typeof value !== 'string' || value.length === 0) {
@@ -309,7 +312,100 @@ class MobileContentMigrationTarget implements ContentMigrationTargetPort {
         : row?.status === 'started' || row?.status === 'failed'
         ? 'partial'
         : 'none';
-    return { marker, counts: this.counts() };
+    const attachmentRecovery = this.db.executeSync(
+      `SELECT 1 AS complete FROM workspace_content_legacy_attachment_recovery
+       WHERE version = ?`,
+      [ATTACHMENT_RECOVERY_VERSION],
+    ).rows[0];
+    return {
+      marker,
+      counts: this.counts(),
+      attachmentRecoveryComplete: attachmentRecovery?.complete === 1,
+    };
+  }
+
+  /** Restore attachment identities that an old text-only Sync replay removed after migration. */
+  async recoverLegacyAttachments(
+    snapshot: LegacyContentSnapshot,
+    lifecycle: {
+      onProgress(copied: number, total: number): void;
+      onCopied(): void;
+      onVerified(): void;
+    },
+  ): Promise<void> {
+    const messages = snapshot.conversations.flatMap(conversation => {
+      const conversationId = text(conversation.id, 'conversation.id');
+      return (Array.isArray(conversation.messages)
+        ? conversation.messages
+        : []
+      ).map((value, index) => ({
+        conversationId,
+        message: record(value, `conversation.messages[${index}]`),
+      }));
+    });
+    const candidates = messages.filter(({message}) =>
+      Array.isArray(message.attachments) && message.attachments.length > 0,
+    );
+    this.db.executeSync('BEGIN IMMEDIATE');
+    try {
+      let inspected = 0;
+      for (const {conversationId, message} of candidates) {
+        const messageId = stableMessageId(message);
+        const row = this.db.executeSync(
+          `SELECT m.conversation_id, m.role, m.content, l.state_json
+           FROM workspace_content_messages m
+           LEFT JOIN workspace_content_local_message_state l ON l.message_id = m.id
+           WHERE m.id = ?`,
+          [messageId],
+        ).rows[0];
+        if (
+          row &&
+          row.conversation_id === conversationId &&
+          row.role === message.role
+        ) {
+          const rich = projectMobileMessageContent({
+            content: message.content,
+            attachments: message.attachments,
+          });
+          const recovered = recoverLegacyAttachmentContent(
+            decodeWorkspaceMessageContent(String(row.content)),
+            rich.content,
+          );
+          if (recovered) {
+            const currentLocal = row.state_json
+              ? record(JSON.parse(String(row.state_json)), 'message.local')
+              : {};
+            const local = {
+              ...currentLocal,
+              ...(rich.locations?.length
+                ? {contentLocations: rich.locations}
+                : {}),
+            };
+            this.db.executeSync(
+              'UPDATE workspace_content_messages SET content = ? WHERE id = ?',
+              [encodeWorkspaceMessageContent(recovered), messageId],
+            );
+            this.db.executeSync(
+              `INSERT INTO workspace_content_local_message_state (message_id, state_json)
+               VALUES (?, ?) ON CONFLICT(message_id) DO UPDATE SET state_json = excluded.state_json`,
+              [messageId, JSON.stringify(local)],
+            );
+          }
+        }
+        lifecycle.onProgress(++inspected, candidates.length);
+      }
+      lifecycle.onCopied();
+      this.db.executeSync(
+        `INSERT OR REPLACE INTO workspace_content_legacy_attachment_recovery
+         (version, completed_at) VALUES (?, ?)`,
+        [ATTACHMENT_RECOVERY_VERSION, new Date().toISOString()],
+      );
+      lifecycle.onVerified();
+      this.db.executeSync('COMMIT');
+    } catch (error) {
+      this.db.executeSync('ROLLBACK');
+      throw error;
+    }
   }
 
   async replaceWithLegacy(
@@ -497,6 +593,11 @@ class MobileContentMigrationTarget implements ContentMigrationTargetPort {
           );
         }
         lifecycle.onVerified();
+        await tx.execute(
+          `INSERT OR REPLACE INTO workspace_content_legacy_attachment_recovery
+           (version, completed_at) VALUES (?, ?)`,
+          [ATTACHMENT_RECOVERY_VERSION, new Date().toISOString()],
+        );
         await tx.execute(
           `UPDATE workspace_content_migration_journal
            SET status = 'completed', finished_at = ?, failure_message = NULL

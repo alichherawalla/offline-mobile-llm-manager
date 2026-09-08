@@ -41,9 +41,10 @@ export function projectMobileMessageContent(input: {
       attachment.fileSize,
       `${label}.fileSize`,
     );
+    const contentId = requiredString(attachment.id, `${label}.id`);
     if (type === 'image') {
       parts.push({
-        type: 'image', id: requiredString(attachment.id, `${label}.id`),
+        type: 'image', contentId, id: contentId,
         ...(name === undefined ? {} : {name}),
         ...(mimeType === undefined ? {} : {mimeType}),
         ...(sizeBytes === undefined ? {} : {sizeBytes}),
@@ -78,7 +79,7 @@ export function projectMobileMessageContent(input: {
         label,
       );
       parts.push({
-        type: 'audio',
+        type: 'audio', contentId,
         ...(name === undefined ? {} : {name}),
         ...(canonicalMimeType === undefined
           ? {}
@@ -101,7 +102,7 @@ export function projectMobileMessageContent(input: {
           }),
         };
       }
-      parts.push({type: 'file', ...(name === undefined ? {} : {name}),
+      parts.push({type: 'file', contentId, ...(name === undefined ? {} : {name}),
         ...(mimeType === undefined ? {} : {mimeType}),
         ...(sizeBytes === undefined ? {} : {sizeBytes})});
     } else throw new Error(`${label}.type is not supported`);
