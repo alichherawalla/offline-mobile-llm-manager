@@ -119,17 +119,15 @@ The emotional arc for all content: **Recognition -> Return -> Freedom**. Name wh
 
 ## Design Standards
 
-**Any change that touches UI (screens, components, styles) must comply with the design system.** Inherit the shared Off Grid design philosophy from **`../brand/DESIGN_PHILOSOPHY.md`** (the source of truth - brutalist/terminal, Menlo mono, emerald accent, tokens in `@offgrid/design`). Platform specifics: **`docs/design/DESIGN_PHILOSOPHY_SYSTEM.md`** + **`docs/design/VISUAL_HIERARCHY_STANDARD.md`**.
+**Any change that touches UI must follow `brand/DESIGN_PHILOSOPHY.md`, the only design source of truth. Apply its Mobile profile.**
 
-- Read `docs/design/VISUAL_HIERARCHY_STANDARD.md` before writing or modifying any UI code.
-- Check `docs/design/` for any other relevant design documents.
 - Use `TYPOGRAPHY` tokens - never hardcode font sizes or weights.
 - Use `COLORS` tokens - never hardcode color values.
 - Use `SPACING` tokens - never hardcode margin/padding values.
 - Weights must stay ≤ 400 (no bold).
 - Never use emojis or emoticons in UI text - always use `react-native-vector-icons` instead. Feather is the default; MaterialIcons is allowed only when Feather lacks a suitable icon (e.g. `whatshot` for trending).
 - Never use `lucide-react` or any other icon library - only `react-native-vector-icons`.
-- Follow the 5-category text hierarchy: TITLE → BODY → SUBTITLE/DESCRIPTION → META.
+- Follow the canonical Mobile text hierarchy in the brand guide.
 
 ## Reuse Before Building
 
