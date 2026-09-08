@@ -247,6 +247,7 @@ function App() {
         // Pro must register every application port before the first facade lookup constructs the
         // single root. The policy projection resolves that root, so it starts only after optional
         // ports are prepared and registered.
+        if (generation !== startupGeneration.current) return;
         loadPolicySync.start();
 
         // Initialize remote server providers in the background — don't block
