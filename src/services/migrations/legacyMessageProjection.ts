@@ -27,6 +27,7 @@ function portableToolArtifacts(
   const artifacts = (toolArtifacts ?? []).map((value, index) => ({
     ...record(value, `${label}.toolArtifacts[${index}]`),
   }));
+  const consumedArtifactIndexes = new Set<number>();
   if (message.toolCalls !== undefined) {
     if (!Array.isArray(message.toolCalls)) {
       throw new Error(`${label}.toolCalls is not an array`);
@@ -39,7 +40,8 @@ function portableToolArtifacts(
         throw new Error(`${label}.toolCalls[${index}].arguments is not text`);
       }
       const matchingIndex = artifacts.findIndex(
-        artifact =>
+        (artifact, artifactIndex) =>
+          (id !== null || !consumedArtifactIndexes.has(artifactIndex)) &&
           (id === null
             ? artifact.name === name &&
               (artifact.arguments === undefined ||
@@ -56,6 +58,7 @@ function portableToolArtifacts(
         continue;
       }
       const matchingArtifact = artifacts[matchingIndex];
+      if (id === null) consumedArtifactIndexes.add(matchingIndex);
       if (
         matchingArtifact.name !== name ||
         (matchingArtifact.arguments !== undefined &&

@@ -35,9 +35,10 @@ export function projectMobileMessageContent(input: {
     const type = requiredString(attachment.type, `${label}.type`);
     assertSupportedFields(type, attachment, label);
     const projected = projectAttachment(type, attachment, label);
-    mergeAttachmentText(parts, projected, label);
+    mergeAttachmentText(parts, projected);
+    const partIndex = parts.length;
     parts.push(projected.part);
-    locations.push({index: offset + 1, uri: requiredString(attachment.uri, `${label}.uri`)});
+    locations.push({index: partIndex, uri: requiredString(attachment.uri, `${label}.uri`)});
   }
   return {content: parts, locations};
 }
@@ -110,7 +111,6 @@ function projectAttachment(
 function mergeAttachmentText(
   parts: PortableMessageContentPart[],
   projected: ProjectedAttachment,
-  label: string,
 ): void {
   const textPart = parts[0];
   if (textPart?.type !== 'text') return;
@@ -124,7 +124,7 @@ function mergeAttachmentText(
     return;
   }
   if (projected.transcription !== textPart.text) {
-    throw new Error(`${label}.textContent conflicts with message.content`);
+    parts.push({type: 'text', text: projected.transcription});
   }
 }
 
