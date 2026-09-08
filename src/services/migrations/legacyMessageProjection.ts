@@ -55,6 +55,7 @@ function portableToolArtifacts(
           arguments: call.arguments,
           result: '',
         });
+        if (id === null) consumedArtifactIndexes.add(artifacts.length - 1);
         continue;
       }
       const matchingArtifact = artifacts[matchingIndex];
