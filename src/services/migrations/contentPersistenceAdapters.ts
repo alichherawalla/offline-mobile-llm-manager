@@ -42,43 +42,72 @@ function optionalText(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
-function assertPortableToolCalls(message: StoredRecord, label: string): void {
+function portableToolArtifacts(
+  message: StoredRecord,
+  label: string,
+): StoredRecord[] | undefined {
   const toolArtifacts = message.toolArtifacts;
   if (toolArtifacts !== undefined && !Array.isArray(toolArtifacts)) {
     throw new Error(`${label}.toolArtifacts is not an array`);
   }
+  const artifacts = (toolArtifacts ?? []).map((value, index) => ({
+    ...record(value, `${label}.toolArtifacts[${index}]`),
+  }));
   if (message.toolCalls !== undefined) {
     if (!Array.isArray(message.toolCalls)) {
       throw new Error(`${label}.toolCalls is not an array`);
     }
-    const artifacts = (toolArtifacts ?? []).map((value, index) =>
-      record(value, `${label}.toolArtifacts[${index}]`),
-    );
     for (const [index, value] of message.toolCalls.entries()) {
       const call = record(value, `${label}.toolCalls[${index}]`);
-      const matchingArtifact = artifacts.find(
+      const id = optionalText(call.id);
+      const name = text(call.name, `${label}.toolCalls[${index}].name`);
+      if (typeof call.arguments !== 'string') {
+        throw new Error(`${label}.toolCalls[${index}].arguments is not text`);
+      }
+      const matchingIndex = artifacts.findIndex(
         artifact =>
-          (optionalText(call.id) === null || artifact.id === call.id) &&
-          artifact.name === call.name &&
-          artifact.arguments === call.arguments,
+          (id === null
+            ? artifact.name === name &&
+              (artifact.arguments === undefined ||
+                artifact.arguments === call.arguments)
+            : artifact.id === id),
       );
-      if (!matchingArtifact) {
+      if (matchingIndex < 0) {
+        artifacts.push({
+          ...(id === null ? {} : {id}),
+          name,
+          arguments: call.arguments,
+          result: '',
+        });
+        continue;
+      }
+      const matchingArtifact = artifacts[matchingIndex];
+      if (
+        matchingArtifact.name !== name ||
+        (matchingArtifact.arguments !== undefined &&
+          matchingArtifact.arguments !== call.arguments)
+      ) {
         throw new Error(
-          `${label}.toolCalls[${index}] has no lossless completed-tool artifact`,
+          `${label}.toolCalls[${index}] conflicts with its completed-tool artifact`,
         );
       }
+      artifacts[matchingIndex] = {
+        ...matchingArtifact,
+        ...(id === null ? {} : {id}),
+        name,
+        arguments: call.arguments,
+      };
     }
   }
+  return artifacts.length > 0 ? artifacts : undefined;
 }
 
 function portableContext(message: StoredRecord, label: string): string | null {
-  assertPortableToolCalls(message, label);
-
   const generationMeta =
     message.generationMeta === undefined
       ? undefined
       : record(message.generationMeta, `${label}.generationMeta`);
-  const toolArtifacts = message.toolArtifacts as unknown[] | undefined;
+  const toolArtifacts = portableToolArtifacts(message, label);
   const role = text(message.role, `${label}.role`);
   const candidate = {
     ...(message.reasoningContent === undefined
