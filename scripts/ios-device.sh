@@ -150,15 +150,19 @@ NATIVE_STAMP="build/device/.offgrid-native-inputs.sha256"
 native_input_hash() {
   {
     printf '%s\n' "team=$TEAM" "profile=${IOS_PROFILE:-}" \
-      "metro=${IOS_METRO_HOST:-}" "forceBundle=${FORCE_BUNDLING:-}" \
+      "forceBundle=${FORCE_BUNDLING:-}" \
       "skipMetroIp=${SKIP_BUNDLING_METRO_IP:-}"
-    find "$MOBILE_ROOT/ios" -type f \
-      ! -path "$MOBILE_ROOT/ios/build/*" \
-      ! -path "$MOBILE_ROOT/ios/Pods/*" -exec shasum -a 256 {} +
-    if [ -d "$MOBILE_ROOT/patches" ]; then
-      find "$MOBILE_ROOT/patches" -type f -exec shasum -a 256 {} +
-    fi
-    shasum -a 256 "$MOBILE_ROOT/package.json" "$MOBILE_ROOT/package-lock.json"
+    # Hash repository inputs, not Xcode's mutable user state. Files such as
+    # xcuserdata and .xcode.env.local change during a build and would make every
+    # later run look stale even when no native source changed.
+    {
+      git -C "$MOBILE_ROOT" ls-files -z -- ios patches package.json package-lock.json
+      git -C "$MOBILE_ROOT" ls-files -z --others --exclude-standard -- \
+        ios patches package.json package-lock.json
+    } | while IFS= read -r -d '' path; do
+      printf 'path=%s\n' "$path"
+      shasum -a 256 "$MOBILE_ROOT/$path"
+    done
   } | shasum -a 256 | awk '{print $1}'
 }
 
