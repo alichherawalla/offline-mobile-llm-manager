@@ -3,6 +3,7 @@ import type {
   MessageRecord,
   PortableMessageContentPart,
 } from '@offgrid/application';
+import {appendDocumentText} from '@offgrid/models';
 
 type MobileAttachmentInput = Readonly<Record<string, unknown>>;
 
@@ -29,21 +30,26 @@ export function projectMobileMessageContent(input: {
     const type = requiredString(attachment.type, `${label}.type`);
     const unsupported = (type === 'audio'
       ? ['pending']
-      : ['pending', 'textContent', 'fileSize', 'audioFormat', 'audioDurationSeconds'])
+      : type === 'document'
+        ? ['pending', 'audioFormat', 'audioDurationSeconds']
+        : ['pending', 'textContent', 'audioFormat', 'audioDurationSeconds'])
       .find(key => attachment[key] !== undefined);
     if (unsupported) throw new Error(`${label}.${unsupported} has no canonical rich-content field`);
     const mimeType = optionalString(attachment.mimeType, `${label}.mimeType`);
+    const name = optionalString(attachment.fileName, `${label}.fileName`);
+    const sizeBytes = optionalNonNegativeNumber(
+      attachment.fileSize,
+      `${label}.fileSize`,
+    );
     if (type === 'image') {
-      if (attachment.fileName !== undefined) {
-        throw new Error(`${label}.fileName has no canonical image-content field`);
-      }
       parts.push({
         type: 'image', id: requiredString(attachment.id, `${label}.id`),
+        ...(name === undefined ? {} : {name}),
         ...(mimeType === undefined ? {} : {mimeType}),
+        ...(sizeBytes === undefined ? {} : {sizeBytes}),
         ...optionalDimensions(attachment, label),
       });
     } else if (type === 'audio') {
-      const name = optionalString(attachment.fileName, `${label}.fileName`);
       const transcription = optionalString(
         attachment.textContent,
         `${label}.textContent`,
@@ -66,10 +72,6 @@ export function projectMobileMessageContent(input: {
         attachment.audioDurationSeconds,
         `${label}.audioDurationSeconds`,
       );
-      const sizeBytes = optionalNonNegativeNumber(
-        attachment.fileSize,
-        `${label}.fileSize`,
-      );
       const canonicalMimeType = canonicalAudioMimeType(
         attachment.audioFormat,
         mimeType,
@@ -85,9 +87,23 @@ export function projectMobileMessageContent(input: {
         ...(durationSeconds === undefined ? {} : {durationSeconds}),
       });
     } else if (type === 'document') {
-      const name = optionalString(attachment.fileName, `${label}.fileName`);
+      const extractedText = optionalString(
+        attachment.textContent,
+        `${label}.textContent`,
+      );
+      const textPart = parts[0];
+      if (textPart?.type === 'text') {
+        parts[0] = {
+          type: 'text',
+          text: appendDocumentText(textPart.text, {
+            ...(name === undefined ? {} : {fileName: name}),
+            ...(extractedText === undefined ? {} : {textContent: extractedText}),
+          }),
+        };
+      }
       parts.push({type: 'file', ...(name === undefined ? {} : {name}),
-        ...(mimeType === undefined ? {} : {mimeType})});
+        ...(mimeType === undefined ? {} : {mimeType}),
+        ...(sizeBytes === undefined ? {} : {sizeBytes})});
     } else throw new Error(`${label}.type is not supported`);
     locations.push({index: offset + 1, uri: requiredString(attachment.uri, `${label}.uri`)});
   }
