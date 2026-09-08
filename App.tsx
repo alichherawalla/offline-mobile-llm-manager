@@ -124,10 +124,23 @@ const ensureModelSelectionStoreHydrated = async () => {
   if (!persistApi.hasHydrated()) await persistApi.rehydrate();
 };
 
-function stopMobileRuntime(loadPolicySync: ReturnType<typeof createLoadPolicySync>): void {
+/**
+ * The previous teardown, so the next startup can wait for it.
+ *
+ * Stopping the application shuts chat down and waits for every accepted reply. Starting again
+ * before that settles would compose a new root while the old one was still writing.
+ */
+let runtimeStopped: Promise<void> = Promise.resolve();
+
+function stopMobileRuntime(
+  loadPolicySync: ReturnType<typeof createLoadPolicySync>,
+): Promise<void> {
   stopNetworkReconnectWatcher();
-  stopMobileApplication();
   loadPolicySync.dispose();
+  runtimeStopped = stopMobileApplication().catch(error => {
+    logger.error('[App] Error stopping app:', error);
+  });
+  return runtimeStopped;
 }
 
 function App() {
@@ -184,6 +197,8 @@ function App() {
       loadPolicySync: ReturnType<typeof createLoadPolicySync>,
     ) => {
       try {
+        // Nothing may start until the previous root has finished stopping.
+        await runtimeStopped;
         // Ensure persisted download metadata is loaded before restore logic reads it.
         logger.log('[BOOT] app store hydrate');
         await ensureAppStoreHydrated();
@@ -310,7 +325,7 @@ function App() {
     initializeApp(generation, loadPolicySync);
     return () => {
       startupGeneration.current += 1;
-      stopMobileRuntime(loadPolicySync);
+      stopMobileRuntime(loadPolicySync).catch(() => undefined);
     };
   }, [initializeApp]);
 
