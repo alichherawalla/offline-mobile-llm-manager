@@ -403,8 +403,7 @@ device** before its PR merges. "It's shared JS, so it works on both" is a DEFECT
 here: the vision fix worked on iOS yet needed separate Android verification. Full gate for every bug PR:
 1. Real-boundary integration test (below) — green.
 2. On-device e2e on **both** platforms — reproduce the real user flow, confirm via the device log/UI.
-3. `/hygiene` audit — pass.
-4. CI all green: lint, typecheck, test, architecture, android-build, SonarCloud, CodeRabbit.
+3. CI all green: lint, typecheck, test, architecture, android-build, SonarCloud, CodeRabbit.
 
 ## Driving the devices yourself (no journey engine)
 - **iOS (physical):** drive **WebDriverAgent (WDA) directly over HTTP**. Bring the WDA server up with

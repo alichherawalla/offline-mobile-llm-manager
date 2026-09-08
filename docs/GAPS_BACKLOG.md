@@ -642,7 +642,7 @@ proper-threads is the path.
 
 ---
 
-## Repo-wide /hygiene audit — open items - 2026-07-09 (SOLID §A/§B + DRY §C)
+## Repo-wide engineering audit — open items - 2026-07-09 (SOLID §A/§B + DRY §C)
 
 Through-line: decision/capability logic derived ad-hoc at many call sites instead of owned once by a
 service.
