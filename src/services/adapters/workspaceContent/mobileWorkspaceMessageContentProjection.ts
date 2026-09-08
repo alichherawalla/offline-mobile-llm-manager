@@ -28,7 +28,7 @@ export function projectMobileMessageContent(input: {
     const attachment = value as MobileAttachmentInput;
     const type = requiredString(attachment.type, `${label}.type`);
     const unsupported = (type === 'audio'
-      ? ['pending', 'fileSize']
+      ? ['pending']
       : ['pending', 'textContent', 'fileSize', 'audioFormat', 'audioDurationSeconds'])
       .find(key => attachment[key] !== undefined);
     if (unsupported) throw new Error(`${label}.${unsupported} has no canonical rich-content field`);
@@ -66,6 +66,10 @@ export function projectMobileMessageContent(input: {
         attachment.audioDurationSeconds,
         `${label}.audioDurationSeconds`,
       );
+      const sizeBytes = optionalNonNegativeNumber(
+        attachment.fileSize,
+        `${label}.fileSize`,
+      );
       const canonicalMimeType = canonicalAudioMimeType(
         attachment.audioFormat,
         mimeType,
@@ -77,6 +81,7 @@ export function projectMobileMessageContent(input: {
         ...(canonicalMimeType === undefined
           ? {}
           : {mimeType: canonicalMimeType}),
+        ...(sizeBytes === undefined ? {} : {sizeBytes}),
         ...(durationSeconds === undefined ? {} : {durationSeconds}),
       });
     } else if (type === 'document') {
