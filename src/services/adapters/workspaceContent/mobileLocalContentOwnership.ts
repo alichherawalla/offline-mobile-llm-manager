@@ -82,7 +82,7 @@ export function retainedMobileMessageByteIdentities(
             `file:${absoluteFilePath(
               location.uri,
               `message ${message.id} local content URI`,
-              false,
+              true,
             )}`,
           );
         }

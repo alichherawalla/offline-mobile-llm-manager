@@ -24,10 +24,12 @@ function message(
 
 describe('Mobile local content ownership', () => {
   it.each([
-    ['canonical content identity', { contentId: 'image-1' }],
-    ['legacy portable-content index', { index: 1 }],
-  ] as const)('resolves %s through the shared identity policy', (_, identity) => {
-    const locations = [{ ...identity, uri: 'file:///images/image-1.png' }];
+    ['canonical identity and file URI', { contentId: 'image-1' }, 'file:///images/image-1.png'],
+    ['canonical identity and legacy absolute path', { contentId: 'image-1' }, '/images/image-1.png'],
+    ['legacy index and file URI', { index: 1 }, 'file:///images/image-1.png'],
+    ['legacy index and absolute path', { index: 1 }, '/images/image-1.png'],
+  ] as const)('resolves %s through the shared identity policy', (_, identity, uri) => {
+    const locations = [{ ...identity, uri }];
 
     expect(
       retainedMobileMessageByteIdentities([
