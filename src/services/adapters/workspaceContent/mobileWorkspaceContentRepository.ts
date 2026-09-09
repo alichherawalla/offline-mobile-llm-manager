@@ -2,11 +2,9 @@
 import type {
   ChatTurnRecord,
   ConversationRecord,
-  LocalMessageContentLocation,
   MessageRecord,
   ProjectRecord,
   WorkspaceContentChange,
-  WorkspaceContentAttachmentLocationInput,
   WorkspaceContentCommitResult,
   WorkspaceContentMigrationStatus,
   WorkspaceContentOutboxClaim,
@@ -20,7 +18,6 @@ import type {
 import type { DB, Scalar } from '@op-engineering/op-sqlite';
 import {
   parseMessageOrderToken,
-  projectWorkspaceContentAttachmentByteIdentities,
   serializeMessageOrderToken,
 } from '@offgrid/application';
 import { generateId } from '../../../utils/generateId';
@@ -37,6 +34,9 @@ import {
   type MobileCanonicalImagePrivacyPort,
   type MobileOwnedDirectoryPrivacyPort,
 } from './mobileLocalResourcePrivacyWorkflow';
+import {
+  projectMobileWorkspaceContentAttachmentByteIdentities,
+} from './mobileWorkspaceContentAttachmentIdentity';
 
 type ProjectRow = {
   id: string;
@@ -82,26 +82,6 @@ const MESSAGE_ROW_SELECT = `SELECT m.id, m.conversation_id, m.turn_id, m.positio
   LEFT JOIN workspace_content_local_message_state l ON l.message_id = m.id`;
 
 export { projectMobileMessageContent } from './mobileWorkspaceMessageContentProjection';
-
-function attachmentLocationInput(
-  location: LocalMessageContentLocation,
-): WorkspaceContentAttachmentLocationInput {
-  return typeof location.contentId === 'string'
-    ? {
-        kind: 'canonical',
-        location: location as Extract<
-          LocalMessageContentLocation,
-          { contentId: string }
-        >,
-      }
-    : {
-        kind: 'legacy_index',
-        location: location as Extract<
-          LocalMessageContentLocation,
-          { index: number }
-        >,
-      };
-}
 
 export interface WorkspaceMessageHolderReceipt {
   readonly messageId: string;
@@ -329,7 +309,6 @@ export class MobileWorkspaceContentRepository implements WorkspaceContentReposit
     });
   }
 
-  // eslint-disable-next-line complexity -- One SQLite CAS validates identity, preimage, receipt, and commit.
   async removeMessageHolderWithReceipt(input: {
     readonly messageId: string;
     readonly deletionOperationId: string;
@@ -386,13 +365,8 @@ export class MobileWorkspaceContentRepository implements WorkspaceContentReposit
         : null;
       if (stableJson(current) !== stableJson(input.expectedPreimage))
         throw new Error(`Message ${input.messageId} local preimage changed.`);
-      const locations = (message.local?.contentLocations ?? []).map(
-        attachmentLocationInput,
-      );
-      const identities = projectWorkspaceContentAttachmentByteIdentities({
-        portable: message.portable,
-        locations,
-      });
+      const identities =
+        projectMobileWorkspaceContentAttachmentByteIdentities(message);
       if (!identities.ok) throw new Error(identities.failure.message);
       const targetIndexes = identities.value.flatMap((identity, index) =>
         identity.contentId === input.syncId ? [index] : [],
@@ -646,12 +620,9 @@ export class MobileWorkspaceContentRepository implements WorkspaceContentReposit
       );
     const portable = messageFromRow(portableRow).portable;
     const ownsTarget = (local: MessageRecord['local'] | null): boolean => {
-      const locations = (local?.contentLocations ?? []).map(
-        attachmentLocationInput,
-      );
-      const projected = projectWorkspaceContentAttachmentByteIdentities({
+      const projected = projectMobileWorkspaceContentAttachmentByteIdentities({
         portable,
-        locations,
+        local: local ?? undefined,
       });
       if (!projected.ok) throw new Error(projected.failure.message);
       return projected.value.some(
