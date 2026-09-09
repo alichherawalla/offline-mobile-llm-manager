@@ -62,10 +62,9 @@ describePro('the Sync activity card', () => {
       <TransferActivitySection projection={projection} onOpen={() => {}} />,
     );
 
+    expect(view.getByText('To Studio Mac')).toBeTruthy();
     expect(
-      view.getByText(
-        `To Studio Mac · ${new Date(updatedAt).toLocaleString()}`,
-      ),
+      view.getByText(new Date(updatedAt).toLocaleString()),
     ).toBeTruthy();
   });
 });
