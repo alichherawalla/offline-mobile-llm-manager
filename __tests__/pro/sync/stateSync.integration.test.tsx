@@ -9,6 +9,7 @@ import { CORE_SYNC_ENTITIES } from '@offgrid/application';
 import {
   OpLog,
   StateSync,
+  createSharedFileDescriptor,
   TASK_LAUNCH_ENTITY,
   TASK_RUN_ENTITY,
   TASK_VISUAL_STEP_ENTITY,
@@ -29,7 +30,10 @@ import {
 } from '../../../src/bootstrap/hookRegistry';
 import { useAppStore } from '../../../src/stores/appStore';
 import { buildSyncEngine } from '../../../src/services/sync/engine';
-import { type SyncMutation } from '../../../src/services/sync/mutation';
+import {
+  sharedFilePutMutation,
+  type SyncMutation,
+} from '../../../src/services/sync/mutation';
 import {
   STATE_CHANNEL,
   stateSyncService,
@@ -755,6 +759,25 @@ describe('Pro mobile state sync journey', () => {
         ],
       ).toBe('connected'),
     );
+
+    const screenshot = createSharedFileDescriptor({
+      syncId: '66e332d1-1809-4d70-a6da-36095c8cb5c9',
+      kind: 'screenshot',
+      name: 'Screenshot 2026-09-09 at 12.45.06 AM.png',
+      mimeType: 'image/png',
+      fileSize: 382_000,
+      createdAt: '2026-09-09T07:45:06.000Z',
+      width: 1179,
+      height: 2556,
+    });
+    if (!screenshot) throw new Error('The screenshot descriptor was invalid.');
+    await stateSyncService.stageMutation(sharedFilePutMutation(screenshot));
+    expect(
+      stateSyncService.sendSharedFileRecord(
+        remoteDevice.id,
+        screenshot.syncId,
+      ),
+    ).toBe(true);
 
     releaseSlowStartup?.();
     await stateSyncService.whenReady();
