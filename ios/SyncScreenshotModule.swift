@@ -4,10 +4,11 @@ import UIKit
 import UniformTypeIdentifiers
 
 @objc(SyncScreenshotModule)
-final class SyncScreenshotModule: RCTEventEmitter {
+final class SyncScreenshotModule: RCTEventEmitter, PHPhotoLibraryChangeObserver {
   private var enabled = false
   private var hasListeners = false
   private var lastAssetIdentifier: String?
+  private var observingPhotoLibrary = false
 
   @objc
   override static func requiresMainQueueSetup() -> Bool {
@@ -31,35 +32,45 @@ final class SyncScreenshotModule: RCTEventEmitter {
     DispatchQueue.main.async { [weak self] in
       guard let self, enabled != next else { return }
       enabled = next
-      NotificationCenter.default.removeObserver(
-        self,
-        name: UIApplication.userDidTakeScreenshotNotification,
-        object: nil
-      )
-      guard next else { return }
+      guard next else {
+        stopPhotoLibraryObservation()
+        return
+      }
       PHPhotoLibrary.requestAuthorization(for: .readWrite) { [weak self] status in
         guard status == .authorized || status == .limited else { return }
         DispatchQueue.main.async {
           guard let self, self.enabled else { return }
-          NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(self.screenshotTaken),
-            name: UIApplication.userDidTakeScreenshotNotification,
-            object: nil
-          )
+          self.startPhotoLibraryObservation()
         }
       }
     }
   }
 
-  @objc private func screenshotTaken() {
+  private func startPhotoLibraryObservation() {
+    guard !observingPhotoLibrary else { return }
+    // Existing screenshots are the baseline. Only assets added after sharing is enabled are sent.
+    lastAssetIdentifier = latestScreenshotAsset()?.localIdentifier
+    PHPhotoLibrary.shared().register(self)
+    observingPhotoLibrary = true
+  }
+
+  private func stopPhotoLibraryObservation() {
+    guard observingPhotoLibrary else { return }
+    PHPhotoLibrary.shared().unregisterChangeObserver(self)
+    observingPhotoLibrary = false
+  }
+
+  func photoLibraryDidChange(_ changeInstance: PHChange) {
     guard enabled else { return }
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) { [weak self] in
-      self?.captureLatestScreenshot()
+    // PhotoKit calls observers on its own serial queue. React Native events and module state stay on
+    // the main queue. Reading the newest screenshot also covers changes delivered as a batch.
+    DispatchQueue.main.async { [weak self] in
+      guard let self, self.enabled else { return }
+      self.captureLatestScreenshot()
     }
   }
 
-  private func captureLatestScreenshot() {
+  private func latestScreenshotAsset() -> PHAsset? {
     let options = PHFetchOptions()
     options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
     options.fetchLimit = 1
@@ -67,9 +78,12 @@ final class SyncScreenshotModule: RCTEventEmitter {
       format: "(mediaSubtype & %d) != 0",
       PHAssetMediaSubtype.photoScreenshot.rawValue
     )
-    let assets = PHAsset.fetchAssets(with: .image, options: options)
+    return PHAsset.fetchAssets(with: .image, options: options).firstObject
+  }
+
+  private func captureLatestScreenshot() {
     guard
-      let asset = assets.firstObject,
+      let asset = latestScreenshotAsset(),
       asset.localIdentifier != lastAssetIdentifier
     else { return }
     lastAssetIdentifier = asset.localIdentifier
@@ -123,7 +137,9 @@ final class SyncScreenshotModule: RCTEventEmitter {
   }
 
   deinit {
-    NotificationCenter.default.removeObserver(self)
+    if observingPhotoLibrary {
+      PHPhotoLibrary.shared().unregisterChangeObserver(self)
+    }
   }
 }
 
